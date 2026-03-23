@@ -7,11 +7,10 @@ function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [activeTab, setActiveTab] = useState('stats');
+  const [activeTab, setActiveTab] = useState('users');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Admin check karo
     const user = JSON.parse(
       localStorage.getItem('user')
     );
@@ -109,6 +108,15 @@ function AdminDashboard() {
       default: return 'bg-gray-100 text-gray-600';
     }
   };
+
+  // Loading Check
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-2xl">⏳ Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
@@ -276,21 +284,23 @@ function AdminDashboard() {
                             </span>
                           )}
                         </td>
-                        <td className="p-3 flex gap-2">
-                          {!worker.isVerified && (
+                        <td className="p-3">
+                          <div className="flex gap-2">
+                            {!worker.isVerified && (
+                              <button
+                                onClick={() => handleVerifyWorker(worker._id)}
+                                className="bg-green-500 text-white px-3 py-1 rounded-lg text-sm"
+                              >
+                                Verify
+                              </button>
+                            )}
                             <button
-                              onClick={() => handleVerifyWorker(worker._id)}
-                              className="bg-green-500 text-white px-3 py-1 rounded-lg text-sm"
+                              onClick={() => handleDeleteUser(worker._id)}
+                              className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm"
                             >
-                              Verify
+                              Delete
                             </button>
-                          )}
-                          <button
-                            onClick={() => handleDeleteUser(worker._id)}
-                            className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm"
-                          >
-                            Delete
-                          </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -335,8 +345,6 @@ function AdminDashboard() {
                       <span className={`px-3 py-1 rounded-full text-sm font-medium text-center ${getStatusColor(booking.status)}`}>
                         {booking.status}
                       </span>
-
-                      {/* Status Change */}
                       <select
                         onChange={(e) => handleStatusChange(
                           booking._id,
