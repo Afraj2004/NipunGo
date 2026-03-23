@@ -3,24 +3,22 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const connectDB = require('./config/db');
 
-// Config
 dotenv.config();
 connectDB();
 
 const app = express();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/booking', require('./routes/booking'));
+app.use('/api/worker', require('./routes/worker')); // 👈 New!
 
-// Test Route
 app.get('/', (req, res) => {
-  res.json({ 
-    message: 'NipunGo Server Chal Raha Hai! 🚀' 
+  res.json({
+    message: 'NipunGo Server Chal Raha Hai! 🚀'
   });
 });
 

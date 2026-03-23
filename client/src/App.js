@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Booking from './pages/Booking';
 import Dashboard from './pages/Dashboard';
+import WorkerProfile from './pages/WorkerProfile';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/booking/:serviceName" element={<Booking />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/worker/:workerId" element={<WorkerProfile />} />
         </Routes>
       </div>
       <Footer />

@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema({
     enum: ['customer', 'worker'],
     default: 'customer'
   },
-  // Worker ke liye extra fields
+  // Worker Fields
   service: {
     type: String,
     default: ''
@@ -36,9 +36,25 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  totalReviews: {
+    type: Number,
+    default: 0
+  },
   price: {
     type: Number,
     default: 0
+  },
+  experience: {
+    type: String,
+    default: ''
+  },
+  about: {
+    type: String,
+    default: ''
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
   },
   createdAt: {
     type: Date,
