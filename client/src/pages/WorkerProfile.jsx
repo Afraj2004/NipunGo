@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from '../utils/axios';
 
@@ -8,11 +8,7 @@ function WorkerProfile() {
   const [worker, setWorker] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchWorker();
-  }, []);
-
-  const fetchWorker = async () => {
+  const fetchWorker = useCallback(async () => {
     try {
       const response = await axios.get(
         `/worker/${workerId}`
@@ -25,7 +21,11 @@ function WorkerProfile() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [workerId]);
+
+  useEffect(() => {
+    fetchWorker();
+  }, [fetchWorker]);
 
   const handleBookNow = () => {
     const token = localStorage.getItem('token');
@@ -127,8 +127,8 @@ function WorkerProfile() {
                 👨‍🔧 About
               </h2>
               <p className="text-gray-600">
-                {worker.about || 
-                  `Professional ${worker.service} with years of experience. Quality work guaranteed!`
+                {worker.about ||
+                  `Professional ${worker.service} with years of experience!`
                 }
               </p>
             </div>
