@@ -20,7 +20,7 @@ function Dashboard() {
 
     setUser(JSON.parse(savedUser));
     fetchBookings(token);
-  }, []);
+  }, [navigate]);
 
   const fetchBookings = async (token) => {
     try {

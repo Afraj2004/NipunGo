@@ -85,15 +85,15 @@ function Footer() {
 
             {/* Social Links */}
             <div className="flex gap-4 mt-4">
-              <a href="#" className="text-gray-400 hover:text-white text-xl">
-                📘
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white text-xl">
-                📷
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white text-xl">
-                🐦
-              </a>
+              <a href="https://facebook.com" className="text-gray-400 hover:text-white text-xl">
+  📘
+</a>
+<a href="https://instagram.com" className="text-gray-400 hover:text-white text-xl">
+  📷
+</a>
+<a href="https://twitter.com" className="text-gray-400 hover:text-white text-xl">
+  🐦
+</a>
             </div>
           </div>
 
