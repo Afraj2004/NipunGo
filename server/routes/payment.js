@@ -3,19 +3,19 @@ const router = express.Router();
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 
-// Razorpay instance
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_SECRET
-});
-
 // Order banao
 router.post('/create-order', async (req, res) => {
   try {
+    // Razorpay instance route ke andar banao
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_SECRET
+    });
+
     const { amount, bookingId } = req.body;
 
     const options = {
-      amount: amount * 100, // Paise mein convert
+      amount: amount * 100,
       currency: 'INR',
       receipt: `booking_${bookingId}`,
       notes: {
@@ -48,7 +48,6 @@ router.post('/verify', async (req, res) => {
       razorpay_signature
     } = req.body;
 
-    // Signature verify karo
     const sign = razorpay_order_id + '|' + razorpay_payment_id;
     const expectedSign = crypto
       .createHmac('sha256', process.env.RAZORPAY_SECRET)
