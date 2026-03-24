@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from '../utils/axios';
 
@@ -12,6 +12,31 @@ function Review() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [booking, setBooking] = useState(null);
+
+  // Booking fetch karo worker id ke liye
+  const fetchBooking = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `/booking/single/${bookingId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      if (response.data.success) {
+        setBooking(response.data.booking);
+      }
+    } catch (error) {
+      console.log('Error fetching booking:', error);
+    }
+  }, [bookingId]);
+
+  useEffect(() => {
+    fetchBooking();
+  }, [fetchBooking]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,11 +60,10 @@ function Review() {
         {
           booking: bookingId,
           customer: user.id,
-          // Temporary - baad mein worker id aayegi
-          worker: user.id,
+          worker: booking?.worker || user.id,
           rating,
           comment,
-          service: 'Service'
+          service: booking?.service || 'Service'
         },
         {
           headers: {

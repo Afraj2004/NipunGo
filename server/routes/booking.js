@@ -144,4 +144,32 @@ router.put('/cancel/:bookingId', async (req, res) => {
   }
 });
 
+// Single booking dekho
+router.get('/single/:bookingId', async (req, res) => {
+  try {
+    const booking = await Booking.findById(
+      req.params.bookingId
+    )
+      .populate('customer', 'name email')
+      .populate('worker', 'name service');
+
+    if (!booking) {
+      return res.status(404).json({
+        message: 'Booking nahi mili!'
+      });
+    }
+
+    res.json({
+      success: true,
+      booking
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: 'Server Error!',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
