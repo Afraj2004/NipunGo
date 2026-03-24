@@ -15,7 +15,8 @@ app.use(express.json());
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/booking', require('./routes/booking'));
 app.use('/api/worker', require('./routes/worker'));
-app.use('/api/admin', require('./routes/admin')); // 👈 New!
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/review', require('./routes/review')); // 👈 New!
 
 app.get('/', (req, res) => {
   res.json({
