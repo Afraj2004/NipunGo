@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -114,7 +114,14 @@ const testimonials = [
 
 function Home() {
   const navigate = useNavigate();
+  const [user, setUser] = useState(null);
 
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []); 
   const handleBookNow = (serviceName) => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -454,41 +461,48 @@ function Home() {
       </section>
 
       {/* ===== CTA SECTION ===== */}
-      <section className="py-20 bg-gradient-to-r from-primary to-indigo-800">
-        <motion.div
-          variants={fadeIn}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true }}
-          className="max-w-3xl mx-auto px-4 text-center"
+<section className="py-20 bg-gradient-to-r from-primary to-indigo-800">
+  <motion.div
+    variants={fadeIn}
+    initial="hidden"
+    whileInView="visible"
+    viewport={{ once: true }}
+    className="max-w-3xl mx-auto px-4 text-center"
+  >
+    <h2 className="text-4xl font-bold text-white mb-6">
+      Ready to Book? 🚀
+    </h2>
+    <p className="text-indigo-200 text-xl mb-8">
+      Abhi book karo aur pehli booking par
+      special discount pao!
+    </p>
+    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+      
+      {/* Book Now Button - Hamesha Dikhega */}
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => navigate('/services')}
+        className="bg-secondary text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-orange-600 transition shadow-xl"
+      >
+        Abhi Book Karo 🔧
+      </motion.button>
+
+      {/* Register Button - Sirf Tab Dikhega Jab User Login Nahi Hai */}
+      {!user && (
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => navigate('/register')}
+          className="bg-white text-primary px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-xl"
         >
-          <h2 className="text-4xl font-bold text-white mb-6">
-            Ready to Book? 🚀
-          </h2>
-          <p className="text-indigo-200 text-xl mb-8">
-            Abhi book karo aur pehli booking par
-            special discount pao!
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate('/services')}
-              className="bg-secondary text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-orange-600 transition shadow-xl"
-            >
-              Abhi Book Karo 🔧
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate('/register')}
-              className="bg-white text-primary px-8 py-4 rounded-full font-bold text-lg hover:bg-gray-100 transition shadow-xl"
-            >
-              Free Register Karo ✨
-            </motion.button>
-          </div>
-        </motion.div>
-      </section>
+          Free Register Karo ✨
+        </motion.button>
+      )}
+
+    </div>
+  </motion.div>
+</section>
 
     </div>
   );
