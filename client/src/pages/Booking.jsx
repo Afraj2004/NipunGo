@@ -24,6 +24,79 @@ function Booking() {
     });
   };
 
+  const handlePayment = async (bookingId, amount) => {
+    try {
+      const token = localStorage.getItem('token');
+
+      // Order banao
+      const orderResponse = await axios.post(
+        '/payment/create-order',
+        {
+          amount,
+          bookingId
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      const { order, key } = orderResponse.data;
+      const user = JSON.parse(localStorage.getItem('user'));
+
+      // Razorpay checkout open karo
+      const options = {
+        key,
+        amount: order.amount,
+        currency: 'INR',
+        name: 'NipunGo',
+        description: `${serviceName} Service Booking`,
+        order_id: order.id,
+        handler: async (response) => {
+          try {
+            // Payment verify karo
+            const verifyResponse = await axios.post(
+              '/payment/verify',
+              {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`
+                }
+              }
+            );
+
+            if (verifyResponse.data.success) {
+              setSuccess('Payment aur Booking Successful! 🎉');
+              setTimeout(() => {
+                navigate('/dashboard');
+              }, 2000);
+            }
+          } catch (error) {
+            setError('Payment verification failed!');
+          }
+        },
+        prefill: {
+          name: user.name,
+          email: user.email
+        },
+        theme: {
+          color: '#4F46E5'
+        }
+      };
+
+      const razorpayInstance = new window.Razorpay(options);
+      razorpayInstance.open();
+
+    } catch (error) {
+      setError('Payment shuru nahi ho saka!');
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -33,18 +106,18 @@ function Booking() {
       const user = JSON.parse(localStorage.getItem('user'));
       const token = localStorage.getItem('token');
 
+      // Booking banao
       const response = await axios.post(
         '/booking/create',
         {
           customer: user.id,
+          worker: user.id,
           service: serviceName,
           date: formData.date,
           time: formData.time,
           address: formData.address,
           description: formData.description,
-          price: 200,
-          // Temporary worker id
-          worker: user.id
+          price: 200
         },
         {
           headers: {
@@ -54,10 +127,11 @@ function Booking() {
       );
 
       if (response.data.success) {
-        setSuccess('Booking Ho Gayi! 🎉');
-        setTimeout(() => {
-          navigate('/');
-        }, 2000);
+        // Payment shuru karo
+        await handlePayment(
+          response.data.booking._id,
+          200
+        );
       }
 
     } catch (error) {
@@ -181,8 +255,14 @@ function Booking() {
                 <span className="font-bold">{serviceName}</span>
               </div>
               <div className="flex justify-between items-center mt-2">
-                <span className="text-gray-600">Starting Price:</span>
+                <span className="text-gray-600">Price:</span>
                 <span className="font-bold text-secondary">₹200</span>
+              </div>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-gray-600">Payment:</span>
+                <span className="font-bold text-green-600">
+                  Online 💳
+                </span>
               </div>
             </div>
 
@@ -191,7 +271,9 @@ function Booking() {
               disabled={loading}
               className="w-full bg-primary text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition text-lg"
             >
-              {loading ? 'Booking Ho Rahi Hai...' : 'Booking Confirm Karo ✅'}
+              {loading
+                ? 'Processing...'
+                : 'Book Karo & Pay Karo 💳'}
             </button>
 
           </form>
