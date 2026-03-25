@@ -1,16 +1,38 @@
 const mongoose = require('mongoose');
 
 const bookingSchema = new mongoose.Schema({
+
+  // ── Parties ────────────────────────────────
   customer: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  worker: {
+
+  // 👇 Worker pehle NULL rahega — accept karne par assign hoga
+  assignedWorker: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    default: null
   },
+
+  // 👇 Jinhe request gayi hai (saare free workers)
+  pendingWorkers: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }
+  ],
+
+  // 👇 Jinne reject kiya
+  rejectedWorkers: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }
+  ],
+
+  // ── Service Info ───────────────────────────
   service: {
     type: String,
     required: true
@@ -31,19 +53,28 @@ const bookingSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  status: {
-    type: String,
-    enum: [
-      'Pending',
-      'Confirmed',
-      'Completed',
-      'Cancelled'
-    ],
-    default: 'Pending'
-  },
   price: {
     type: Number,
     required: true
+  },
+
+  // ── Status ─────────────────────────────────
+  status: {
+    type: String,
+    enum: [
+      'Searching',   // 👈 Workers dhundh rahe hain
+      'Confirmed',   // Worker ne accept kiya
+      'Completed',   // Kaam ho gaya
+      'Cancelled',   // Cancel ho gayi
+      'No Workers'   // Koi worker available nahi tha
+    ],
+    default: 'Searching'
+  },
+
+  // ── Timestamps ─────────────────────────────
+  acceptedAt: {
+    type: Date,
+    default: null
   },
   createdAt: {
     type: Date,

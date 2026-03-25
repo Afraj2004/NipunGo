@@ -20,10 +20,12 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['customer', 'worker'],
+    // 👇 Admin role add kiya
+    enum: ['customer', 'worker', 'admin'],
     default: 'customer'
   },
-  // Worker Fields
+
+  // ── Worker Fields ──────────────────────────
   service: {
     type: String,
     default: ''
@@ -56,6 +58,13 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+
+  // 👇 YE NEW FIELD ADD KIYA — Worker free hai ya busy
+  isAvailable: {
+    type: Boolean,
+    default: true   // default free rehta hai
+  },
+
   createdAt: {
     type: Date,
     default: Date.now

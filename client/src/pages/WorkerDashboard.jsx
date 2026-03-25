@@ -1,15 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from '../utils/axios';
 
 function WorkerDashboard() {
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState([]);
+
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [myBookings, setMyBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState('requests');
+  const [isAvailable, setIsAvailable] = useState(true);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState('');
 
+  // Polling ref
+  const pollingRef = useRef(null);
+  const userRef = useRef(null);
+
+  // ── Auth + Init ──────────────────────────────────────
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     const token = localStorage.getItem('token');
@@ -21,54 +31,148 @@ function WorkerDashboard() {
 
     const parsedUser = JSON.parse(savedUser);
 
-    // Worker nahi hai toh customer dashboard par bhejo
     if (parsedUser.role !== 'worker') {
       navigate('/dashboard');
       return;
     }
 
     setUser(parsedUser);
-    fetchWorkerBookings(parsedUser.id, token);
+    userRef.current = parsedUser;
+
+    // Initial fetch
+    fetchAllData(parsedUser.id, token);
+    fetchWorkerProfile(parsedUser.id);
+
+    // Polling — har 8 seconds mein naye requests check karo
+    pollingRef.current = setInterval(() => {
+      const tkn = localStorage.getItem('token');
+      if (userRef.current && tkn) {
+        fetchPendingRequests(userRef.current.id, tkn, false);
+      }
+    }, 8000);
+
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
   }, [navigate]);
 
-  const fetchWorkerBookings = async (workerId, token) => {
+  // ── Worker Profile (availability) ────────────────────
+  const fetchWorkerProfile = async (workerId) => {
+    try {
+      const response = await axios.get(`/worker/${workerId}`);
+      if (response.data.success) {
+        setIsAvailable(response.data.worker.isAvailable ?? true);
+      }
+    } catch (err) {
+      console.log('Profile fetch error:', err);
+    }
+  };
+
+  // ── Fetch All Data ───────────────────────────────────
+  const fetchAllData = async (workerId, token) => {
+    setLoading(true);
+    await Promise.all([
+      fetchPendingRequests(workerId, token, false),
+      fetchMyBookings(workerId, token)
+    ]);
+    setLoading(false);
+  };
+
+  // ── Pending Requests ─────────────────────────────────
+  const fetchPendingRequests = useCallback(
+    async (workerId, token, showLoader = false) => {
+      try {
+        const response = await axios.get(
+          `/booking/worker-requests/${workerId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (response.data.success) {
+          setPendingRequests(response.data.requests);
+        }
+      } catch (err) {
+        console.log('Requests fetch error:', err);
+      }
+    },
+    []
+  );
+
+  // ── My Bookings (Confirmed/Completed) ────────────────
+  const fetchMyBookings = async (workerId, token) => {
     try {
       const response = await axios.get(
         `/booking/worker-bookings/${workerId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (response.data.success) {
-        setBookings(response.data.bookings);
+        setMyBookings(response.data.bookings);
       }
-    } catch (error) {
-      console.log('Error:', error);
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.log('Bookings fetch error:', err);
     }
   };
 
+  // ── Accept Request ───────────────────────────────────
   const handleAccept = async (bookingId) => {
+    setActionLoading(bookingId + '_accept');
     try {
       const token = localStorage.getItem('token');
       const response = await axios.put(
         `/booking/accept/${bookingId}`,
-        {},
+        { workerId: user.id },  // 👈 workerId body mein bhejo
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       if (response.data.success) {
-        setBookings(bookings.map(b =>
-          b._id === bookingId
-            ? { ...b, status: 'Confirmed' }
-            : b
-        ));
-        alert('Booking Accept Ho Gayi! ✅');
+        // Request list se hatao
+        setPendingRequests(prev =>
+          prev.filter(r => r._id !== bookingId)
+        );
+        // My bookings mein add karo
+        setMyBookings(prev => [response.data.booking, ...prev]);
+        // Tab switch karo
+        setActiveTab('bookings');
+        alert('Booking Accept Ho Gayi! Kaam shuru karo! 🎉');
       }
-    } catch (error) {
-      alert('Kuch galat hua!');
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Kuch galat hua!';
+      alert(msg);
+      // Refresh karo — shayad kisi aur ne already accept kar liya
+      fetchPendingRequests(user.id, localStorage.getItem('token'));
+    } finally {
+      setActionLoading('');
     }
   };
 
+  // ── Reject Request ───────────────────────────────────
+  const handleReject = async (bookingId) => {
+    if (!window.confirm('Is request ko reject karna chahte ho?')) return;
+
+    setActionLoading(bookingId + '_reject');
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `/booking/reject/${bookingId}`,
+        { workerId: user.id },  // 👈 workerId body mein bhejo
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Request list se hatao
+      setPendingRequests(prev =>
+        prev.filter(r => r._id !== bookingId)
+      );
+
+    } catch (err) {
+      alert('Kuch galat hua!');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  // ── Complete Booking ─────────────────────────────────
   const handleComplete = async (bookingId) => {
+    if (!window.confirm('Kaam complete ho gaya?')) return;
+
+    setActionLoading(bookingId + '_complete');
     try {
       const token = localStorage.getItem('token');
       const response = await axios.put(
@@ -77,98 +181,117 @@ function WorkerDashboard() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (response.data.success) {
-        setBookings(bookings.map(b =>
-          b._id === bookingId
-            ? { ...b, status: 'Completed' }
-            : b
+        setMyBookings(prev => prev.map(b =>
+          b._id === bookingId ? { ...b, status: 'Completed' } : b
         ));
-        alert('Booking Complete Ho Gayi! 🎉');
+        alert('Bahut badhiya! Kaam complete ho gaya! 🌟');
       }
-    } catch (error) {
+    } catch {
       alert('Kuch galat hua!');
+    } finally {
+      setActionLoading('');
     }
   };
 
-  const handleReject = async (bookingId) => {
-    if (!window.confirm('Booking reject karna chahte ho?')) return;
+  // ── Availability Toggle ──────────────────────────────
+  const handleAvailabilityToggle = async () => {
+    setAvailabilityLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const newStatus = !isAvailable;
       await axios.put(
-        `/booking/cancel/${bookingId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
+        `/worker/availability/${user.id}`,
+        { isAvailable: newStatus }
       );
-      setBookings(bookings.map(b =>
-        b._id === bookingId
-          ? { ...b, status: 'Cancelled' }
-          : b
-      ));
-    } catch (error) {
-      alert('Kuch galat hua!');
+      setIsAvailable(newStatus);
+    } catch {
+      alert('Availability update nahi ho saki!');
+    } finally {
+      setAvailabilityLoading(false);
     }
   };
 
-  // Filter
-  const filteredBookings = bookings.filter(b => {
-    if (activeTab === 'all') return true;
-    return b.status.toLowerCase() === activeTab;
-  });
-
-  // Stats
+  // ── Stats ────────────────────────────────────────────
   const stats = {
-    total: bookings.length,
-    pending: bookings.filter(b => b.status === 'Pending').length,
-    confirmed: bookings.filter(b => b.status === 'Confirmed').length,
-    completed: bookings.filter(b => b.status === 'Completed').length,
-    earnings: bookings
+    newRequests: pendingRequests.length,
+    confirmed: myBookings.filter(b => b.status === 'Confirmed').length,
+    completed: myBookings.filter(b => b.status === 'Completed').length,
+    earnings: myBookings
       .filter(b => b.status === 'Completed')
-      .reduce((sum, b) => sum + b.price, 0)
+      .reduce((sum, b) => sum + (b.price || 0), 0)
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'Pending': return 'bg-yellow-100 text-yellow-600 border border-yellow-200';
-      case 'Confirmed': return 'bg-blue-100 text-blue-600 border border-blue-200';
-      case 'Completed': return 'bg-green-100 text-green-600 border border-green-200';
-      case 'Cancelled': return 'bg-red-100 text-red-600 border border-red-200';
-      default: return 'bg-gray-100 text-gray-600';
-    }
+    const colors = {
+      'Searching': 'bg-yellow-100 text-yellow-600 border border-yellow-200',
+      'Confirmed': 'bg-blue-100 text-blue-600 border border-blue-200',
+      'Completed': 'bg-green-100 text-green-600 border border-green-200',
+      'Cancelled': 'bg-red-100 text-red-600 border border-red-200',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-600';
   };
 
-  const tabs = [
-    { id: 'all', label: 'Sabhi', count: stats.total },
-    { id: 'pending', label: 'New', count: stats.pending },
-    { id: 'confirmed', label: 'Confirmed', count: stats.confirmed },
-    { id: 'completed', label: 'Completed', count: stats.completed },
-  ];
-
+  // ── Loading ──────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 1 }}
-          className="text-4xl"
-        >
-          ⏳
-        </motion.div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 1 }}
+            className="text-5xl mb-4"
+          >
+            ⏳
+          </motion.div>
+          <p className="text-gray-500 font-medium">Loading dashboard...</p>
+        </div>
       </div>
     );
   }
 
+  // ── Main Render ──────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50">
 
       {/* ===== HEADER ===== */}
-      <section className="bg-gradient-to-br from-gray-800 via-gray-900 to-black pt-10 pb-24 px-4 relative overflow-hidden">
+      <section className="bg-gradient-to-br from-gray-800 via-gray-900 to-black
+        pt-10 pb-24 px-4 relative overflow-hidden">
 
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary opacity-10 rounded-full blur-3xl"></div>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary
+          opacity-10 rounded-full blur-3xl" />
 
         <div className="max-w-5xl mx-auto relative z-10">
 
           {/* Worker Badge */}
-          <div className="inline-block bg-primary bg-opacity-20 text-primary px-4 py-1 rounded-full text-sm font-medium mb-4 border border-primary border-opacity-30">
-            👷 Worker Dashboard
+          <div className="flex items-center justify-between mb-4">
+            <div className="inline-block bg-primary bg-opacity-20 text-primary
+              px-4 py-1 rounded-full text-sm font-medium border border-primary
+              border-opacity-30">
+              👷 Worker Dashboard
+            </div>
+
+            {/* Availability Toggle */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleAvailabilityToggle}
+              disabled={availabilityLoading}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full
+                text-sm font-bold transition ${
+                isAvailable
+                  ? 'bg-green-500 text-white'
+                  : 'bg-gray-500 text-white'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${
+                isAvailable ? 'bg-white animate-pulse' : 'bg-gray-300'
+              }`} />
+              {availabilityLoading
+                ? '...'
+                : isAvailable
+                ? 'Available ✅'
+                : 'Unavailable ⏸️'
+              }
+            </motion.button>
           </div>
 
           {/* User Info */}
@@ -177,7 +300,9 @@ function WorkerDashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-4 mb-8"
           >
-            <div className="w-16 h-16 bg-white bg-opacity-10 rounded-2xl flex items-center justify-center text-white font-bold text-2xl border border-white border-opacity-20">
+            <div className="w-16 h-16 bg-white bg-opacity-10 rounded-2xl
+              flex items-center justify-center text-white font-bold text-2xl
+              border border-white border-opacity-20">
               {user?.name.charAt(0).toUpperCase()}
             </div>
             <div>
@@ -191,32 +316,31 @@ function WorkerDashboard() {
           </motion.div>
 
           {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4"
-          >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               {
-                label: "Total Bookings",
-                value: stats.total,
-                icon: "📋",
+                label: "New Requests",
+                value: stats.newRequests,
+                icon: "🔔",
+                pulse: stats.newRequests > 0
               },
               {
-                label: "New Requests",
-                value: stats.pending,
-                icon: "🔔",
+                label: "Confirmed",
+                value: stats.confirmed,
+                icon: "📋",
+                pulse: false
               },
               {
                 label: "Completed",
                 value: stats.completed,
                 icon: "✅",
+                pulse: false
               },
               {
                 label: "Total Earnings",
                 value: `₹${stats.earnings}`,
                 icon: "💰",
+                pulse: false
               },
             ].map((stat, index) => (
               <motion.div
@@ -224,70 +348,106 @@ function WorkerDashboard() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * index }}
-                className="bg-white bg-opacity-10 backdrop-blur-sm rounded-2xl p-4 border border-white border-opacity-10"
+                className="bg-white bg-opacity-10 backdrop-blur-sm rounded-2xl
+                  p-4 border border-white border-opacity-10"
               >
-                <div className="text-2xl mb-2">{stat.icon}</div>
+                <div className={`text-2xl mb-2 ${stat.pulse ? 'animate-bounce' : ''}`}>
+                  {stat.icon}
+                </div>
                 <h3 className="text-2xl font-bold text-white">
                   {stat.value}
                 </h3>
-                <p className="text-gray-400 text-sm">
-                  {stat.label}
-                </p>
+                <p className="text-gray-400 text-sm">{stat.label}</p>
               </motion.div>
             ))}
-          </motion.div>
+          </div>
         </div>
       </section>
 
       {/* ===== MAIN CONTENT ===== */}
       <section className="max-w-5xl mx-auto px-4 -mt-12 pb-12">
 
-        {/* New Booking Alert */}
-        {stats.pending > 0 && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 mb-6 flex items-center gap-3"
-          >
-            <div className="text-2xl animate-bounce">🔔</div>
-            <div>
-              <p className="font-bold text-yellow-700">
-                {stats.pending} New Booking Request!
-              </p>
-              <p className="text-yellow-600 text-sm">
-                Jaldi accept karo!
-              </p>
-            </div>
-            <button
-              onClick={() => setActiveTab('pending')}
-              className="ml-auto bg-yellow-400 text-white px-4 py-2 rounded-xl text-sm font-bold"
+        {/* New Request Alert */}
+        <AnimatePresence>
+          {stats.newRequests > 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl
+                p-4 mb-6 flex items-center gap-3"
             >
-              Dekho →
-            </button>
-          </motion.div>
-        )}
+              <div className="text-2xl animate-bounce">🔔</div>
+              <div>
+                <p className="font-bold text-yellow-700">
+                  {stats.newRequests} Nai Booking Request{stats.newRequests > 1 ? 'ein' : ''}!
+                </p>
+                <p className="text-yellow-600 text-sm">
+                  Jaldi accept karo — pehle aao pehle pao! ⚡
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveTab('requests')}
+                className="ml-auto bg-yellow-400 text-white px-4 py-2
+                  rounded-xl text-sm font-bold hover:bg-yellow-500 transition"
+              >
+                Dekho →
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Bookings Card */}
+        {/* Unavailable Warning */}
+        <AnimatePresence>
+          {!isAvailable && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="bg-gray-100 border border-gray-300 rounded-2xl p-4
+                mb-6 flex items-center gap-3"
+            >
+              <span className="text-2xl">⏸️</span>
+              <div>
+                <p className="font-bold text-gray-700">
+                  Aap Unavailable Hain
+                </p>
+                <p className="text-gray-500 text-sm">
+                  Nai requests nahi aayengi. Available karo upar se.
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Main Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.2 }}
           className="bg-white rounded-2xl shadow-lg overflow-hidden"
         >
 
-          {/* Header */}
+          {/* Tabs */}
           <div className="p-6 border-b border-gray-100">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">
-              Booking Requests
-            </h2>
-
-            {/* Tabs */}
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {tabs.map((tab) => (
+            <div className="flex gap-2">
+              {[
+                {
+                  id: 'requests',
+                  label: '🔔 New Requests',
+                  count: stats.newRequests
+                },
+                {
+                  id: 'bookings',
+                  label: '📋 My Bookings',
+                  count: myBookings.length
+                },
+              ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
+                  className={`relative flex items-center gap-2 px-5 py-2.5
+                    rounded-xl text-sm font-medium transition ${
                     activeTab === tab.id
                       ? 'bg-gray-900 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -301,163 +461,366 @@ function WorkerDashboard() {
                   }`}>
                     {tab.count}
                   </span>
+                  {/* Red dot for new requests */}
+                  {tab.id === 'requests' && stats.newRequests > 0 && (
+                    <span className="absolute -top-1 -right-1 w-3 h-3
+                      bg-red-500 rounded-full animate-ping" />
+                  )}
                 </button>
               ))}
+
+              {/* Manual Refresh */}
+              <button
+                onClick={() => fetchAllData(
+                  user.id,
+                  localStorage.getItem('token')
+                )}
+                className="ml-auto p-2.5 bg-gray-100 text-gray-600
+                  rounded-xl hover:bg-gray-200 transition text-sm"
+                title="Refresh"
+              >
+                🔄
+              </button>
             </div>
           </div>
 
-          {/* Bookings */}
           <div className="p-6">
             <AnimatePresence mode="wait">
-              {filteredBookings.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-16"
-                >
-                  <div className="text-6xl mb-4">📭</div>
-                  <p className="text-gray-500 text-lg">
-                    Koi booking nahi hai!
-                  </p>
-                </motion.div>
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex flex-col gap-4"
-                >
-                  {filteredBookings.map((booking, index) => (
-                    <motion.div
-                      key={booking._id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className={`border-2 rounded-2xl p-5 transition ${
-                        booking.status === 'Pending'
-                          ? 'border-yellow-200 bg-yellow-50'
-                          : 'border-gray-100 bg-white'
-                      }`}
-                    >
 
-                      {/* Booking Header */}
-                      <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-bold text-gray-800 text-lg">
-                              {booking.service}
-                            </h3>
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                              {booking.status}
+              {/* ── PENDING REQUESTS TAB ─────────────────── */}
+              {activeTab === 'requests' && (
+                <motion.div
+                  key="requests"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  {pendingRequests.length === 0 ? (
+                    <div className="text-center py-16">
+                      <div className="text-6xl mb-4">📭</div>
+                      <p className="text-gray-500 text-lg font-medium">
+                        Abhi koi nai request nahi!
+                      </p>
+                      <p className="text-gray-400 text-sm mt-1">
+                        Jab customer book karega, yahan dikhega.
+                        Auto-refresh chal raha hai! 🔄
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      {pendingRequests.map((request, index) => (
+                        <motion.div
+                          key={request._id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="border-2 border-yellow-200 bg-yellow-50
+                            rounded-2xl p-5"
+                        >
+                          {/* Header */}
+                          <div className="flex items-start justify-between
+                            flex-wrap gap-3 mb-4">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-bold text-gray-800 text-lg">
+                                  {request.service}
+                                </h3>
+                                <span className="bg-yellow-100 text-yellow-600
+                                  border border-yellow-200 px-3 py-1 rounded-full
+                                  text-xs font-medium">
+                                  🔔 New Request
+                                </span>
+                              </div>
+                              <p className="text-gray-500 text-sm">
+                                ID: #{request._id.slice(-6).toUpperCase()}
+                              </p>
+                            </div>
+                            <span className="text-secondary font-bold text-xl">
+                              ₹{request.price}
                             </span>
                           </div>
-                          <p className="text-gray-500 text-sm">
-                            Booking ID: #{booking._id.slice(-6).toUpperCase()}
-                          </p>
-                        </div>
-                        <span className="text-secondary font-bold text-xl">
-                          ₹{booking.price}
-                        </span>
-                      </div>
 
-                      {/* Customer Info */}
-                      <div className="bg-white rounded-xl p-4 mb-4 flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-primary font-bold">
-                          {booking.customer?.name?.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="font-bold text-gray-800">
-                            {booking.customer?.name}
-                          </p>
-                          <p className="text-gray-500 text-sm">
-                            📱 {booking.customer?.phone}
-                          </p>
-                          <p className="text-gray-500 text-sm">
-                            📧 {booking.customer?.email}
-                          </p>
-                        </div>
-                      </div>
+                                                    {/* Customer Info */}
+                          <div className="bg-white rounded-xl p-4 mb-4
+                            flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-100 rounded-full
+                              flex items-center justify-center text-primary
+                              font-bold text-lg flex-shrink-0">
+                              {request.customer?.name?.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-bold text-gray-800">
+                                {request.customer?.name}
+                              </p>
+                              <p className="text-gray-500 text-sm">
+                                📱 {request.customer?.phone}
+                              </p>
+                              <p className="text-gray-500 text-sm">
+                                📧 {request.customer?.email}
+                              </p>
+                            </div>
+                          </div>
 
-                      {/* Booking Details */}
-                      <div className="grid grid-cols-2 gap-3 mb-4">
-                        <div className="bg-gray-50 rounded-xl p-3">
-                          <p className="text-gray-400 text-xs mb-1">Date</p>
-                          <p className="font-medium text-gray-800">
-                            📅 {booking.date}
-                          </p>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-3">
-                          <p className="text-gray-400 text-xs mb-1">Time</p>
-                          <p className="font-medium text-gray-800">
-                            ⏰ {booking.time}
-                          </p>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-3 col-span-2">
-                          <p className="text-gray-400 text-xs mb-1">Address</p>
-                          <p className="font-medium text-gray-800">
-                            📍 {booking.address}
-                          </p>
-                        </div>
-                        {booking.description && (
-                          <div className="bg-gray-50 rounded-xl p-3 col-span-2">
-                            <p className="text-gray-400 text-xs mb-1">Problem</p>
-                            <p className="font-medium text-gray-800">
-                              📝 {booking.description}
+                          {/* Booking Details */}
+                          <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="bg-white rounded-xl p-3">
+                              <p className="text-gray-400 text-xs mb-1">
+                                Date
+                              </p>
+                              <p className="font-medium text-gray-800 text-sm">
+                                📅 {request.date}
+                              </p>
+                            </div>
+                            <div className="bg-white rounded-xl p-3">
+                              <p className="text-gray-400 text-xs mb-1">
+                                Time
+                              </p>
+                              <p className="font-medium text-gray-800 text-sm">
+                                ⏰ {request.time}
+                              </p>
+                            </div>
+                            <div className="bg-white rounded-xl p-3 col-span-2">
+                              <p className="text-gray-400 text-xs mb-1">
+                                Address
+                              </p>
+                              <p className="font-medium text-gray-800 text-sm">
+                                📍 {request.address}
+                              </p>
+                            </div>
+                            {request.description && (
+                              <div className="bg-white rounded-xl p-3 col-span-2">
+                                <p className="text-gray-400 text-xs mb-1">
+                                  Problem
+                                </p>
+                                <p className="font-medium text-gray-800 text-sm">
+                                  📝 {request.description}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Timer — kitne workers hain abhi bhi */}
+                          <div className="bg-yellow-100 rounded-xl p-3 mb-4
+                            flex items-center gap-2">
+                            <span className="text-yellow-600 text-sm">⚡</span>
+                            <p className="text-yellow-700 text-sm font-medium">
+                              Jaldi karo! Doosre workers bhi yeh request dekh
+                              rahe hain
                             </p>
                           </div>
-                        )}
-                      </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex gap-3">
-                        {booking.status === 'Pending' && (
-                          <>
+                          {/* Action Buttons */}
+                          <div className="flex gap-3">
                             <motion.button
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
-                              onClick={() => handleReject(booking._id)}
-                              className="flex-1 bg-red-50 text-red-500 border border-red-200 py-3 rounded-xl font-bold hover:bg-red-100 transition"
+                              onClick={() => handleReject(request._id)}
+                              disabled={actionLoading === request._id + '_reject'}
+                              className="flex-1 bg-red-50 text-red-500 border
+                                border-red-200 py-3 rounded-xl font-bold
+                                hover:bg-red-100 transition
+                                disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                              ❌ Reject
+                              {actionLoading === request._id + '_reject'
+                                ? '...'
+                                : '❌ Reject'
+                              }
                             </motion.button>
+
                             <motion.button
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
-                              onClick={() => handleAccept(booking._id)}
-                              className="flex-1 bg-green-500 text-white py-3 rounded-xl font-bold hover:bg-green-600 transition shadow-lg"
+                              onClick={() => handleAccept(request._id)}
+                              disabled={actionLoading === request._id + '_accept'}
+                              className="flex-2 flex-grow-[2] bg-green-500
+                                text-white py-3 rounded-xl font-bold
+                                hover:bg-green-600 transition shadow-lg
+                                shadow-green-200
+                                disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                              ✅ Accept Karo
+                              {actionLoading === request._id + '_accept' ? (
+                                <span className="flex items-center
+                                  justify-center gap-2">
+                                  <motion.span
+                                    animate={{ rotate: 360 }}
+                                    transition={{
+                                      repeat: Infinity,
+                                      duration: 1
+                                    }}
+                                  >
+                                    ⏳
+                                  </motion.span>
+                                  Accepting...
+                                </span>
+                              ) : (
+                                '✅ Accept Karo'
+                              )}
                             </motion.button>
-                          </>
-                        )}
-
-                        {booking.status === 'Confirmed' && (
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => handleComplete(booking._id)}
-                            className="flex-1 bg-primary text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg"
-                          >
-                            🎉 Mark as Complete
-                          </motion.button>
-                        )}
-
-                        {booking.status === 'Completed' && (
-                          <div className="flex-1 bg-green-50 text-green-600 border border-green-200 py-3 rounded-xl font-bold text-center">
-                            ✅ Completed
                           </div>
-                        )}
 
-                        {booking.status === 'Cancelled' && (
-                          <div className="flex-1 bg-red-50 text-red-400 border border-red-200 py-3 rounded-xl font-bold text-center">
-                            ❌ Cancelled
-                          </div>
-                        )}
-                      </div>
-
-                    </motion.div>
-                  ))}
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
                 </motion.div>
               )}
+
+              {/* ── MY BOOKINGS TAB ──────────────────────── */}
+              {activeTab === 'bookings' && (
+                <motion.div
+                  key="bookings"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  {myBookings.length === 0 ? (
+                    <div className="text-center py-16">
+                      <div className="text-6xl mb-4">📋</div>
+                      <p className="text-gray-500 text-lg font-medium">
+                        Abhi koi booking nahi!
+                      </p>
+                      <p className="text-gray-400 text-sm mt-1">
+                        Requests accept karne ke baad yahan dikhegi.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      {myBookings.map((booking, index) => (
+                        <motion.div
+                          key={booking._id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="border border-gray-100 rounded-2xl p-5
+                            hover:shadow-md transition-all"
+                        >
+                          {/* Header */}
+                          <div className="flex items-start justify-between
+                            flex-wrap gap-3 mb-4">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-bold text-gray-800 text-lg">
+                                  {booking.service}
+                                </h3>
+                                <span className={`px-3 py-1 rounded-full
+                                  text-xs font-medium
+                                  ${getStatusColor(booking.status)}`}>
+                                  {booking.status}
+                                </span>
+                              </div>
+                              <p className="text-gray-500 text-sm">
+                                ID: #{booking._id.slice(-6).toUpperCase()}
+                              </p>
+                            </div>
+                            <span className="text-secondary font-bold text-xl">
+                              ₹{booking.price}
+                            </span>
+                          </div>
+
+                          {/* Customer Info */}
+                          <div className="bg-gray-50 rounded-xl p-4 mb-4
+                            flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-100 rounded-full
+                              flex items-center justify-center text-primary
+                              font-bold">
+                              {booking.customer?.name?.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-bold text-gray-800">
+                                {booking.customer?.name}
+                              </p>
+                              <a
+                                href={`tel:${booking.customer?.phone}`}
+                                className="text-primary text-sm font-medium
+                                  flex items-center gap-1 hover:underline"
+                              >
+                                📱 {booking.customer?.phone}
+                              </a>
+                            </div>
+                          </div>
+
+                          {/* Details */}
+                          <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="bg-gray-50 rounded-xl p-3">
+                              <p className="text-gray-400 text-xs mb-1">Date</p>
+                              <p className="font-medium text-gray-800 text-sm">
+                                📅 {booking.date}
+                              </p>
+                            </div>
+                            <div className="bg-gray-50 rounded-xl p-3">
+                              <p className="text-gray-400 text-xs mb-1">Time</p>
+                              <p className="font-medium text-gray-800 text-sm">
+                                ⏰ {booking.time}
+                              </p>
+                            </div>
+                            <div className="bg-gray-50 rounded-xl p-3
+                              col-span-2">
+                              <p className="text-gray-400 text-xs mb-1">
+                                Address
+                              </p>
+                              <p className="font-medium text-gray-800 text-sm">
+                                📍 {booking.address}
+                              </p>
+                            </div>
+                            {booking.description && (
+                              <div className="bg-gray-50 rounded-xl p-3
+                                col-span-2">
+                                <p className="text-gray-400 text-xs mb-1">
+                                  Problem
+                                </p>
+                                <p className="font-medium text-gray-800 text-sm">
+                                  📝 {booking.description}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex gap-3">
+                            {booking.status === 'Confirmed' && (
+                              <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => handleComplete(booking._id)}
+                                disabled={
+                                  actionLoading === booking._id + '_complete'
+                                }
+                                className="flex-1 bg-primary text-white py-3
+                                  rounded-xl font-bold hover:bg-indigo-700
+                                  transition shadow-lg shadow-indigo-200
+                                  disabled:opacity-60"
+                              >
+                                {actionLoading === booking._id + '_complete'
+                                  ? '⏳ Updating...'
+                                  : '🎉 Mark as Complete'
+                                }
+                              </motion.button>
+                            )}
+
+                            {booking.status === 'Completed' && (
+                              <div className="flex-1 bg-green-50 text-green-600
+                                border border-green-200 py-3 rounded-xl
+                                font-bold text-center">
+                                ✅ Completed
+                              </div>
+                            )}
+
+                            {booking.status === 'Cancelled' && (
+                              <div className="flex-1 bg-red-50 text-red-400
+                                border border-red-200 py-3 rounded-xl
+                                font-bold text-center">
+                                ❌ Cancelled
+                              </div>
+                            )}
+                          </div>
+
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
             </AnimatePresence>
           </div>
 
