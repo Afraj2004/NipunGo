@@ -194,87 +194,85 @@ function Dashboard() {
   // Polling ref
   const pollingRef = useRef(null);
 
-  // ── Auth Check ────────────────────────────────────────
-  useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
-
-    if (!savedUser || !token) {
-      navigate('/login');
-      return;
-    }
-
-    const parsedUser = JSON.parse(savedUser);
-
-    // Worker ko worker dashboard pe bhejo
-    if (parsedUser.role === 'worker') {
-      navigate('/worker-dashboard');
-      return;
-    }
-
-    setUser(parsedUser);
-    fetchMyBookings(parsedUser.id, token);
-
-    // Polling — har 8 seconds mein searching bookings check karo
-    pollingRef.current = setInterval(() => {
-      const tkn = localStorage.getItem('token');
-      const usr = localStorage.getItem('user');
-      if (usr && tkn) {
-        const u = JSON.parse(usr);
-        pollSearchingBookings(u.id, tkn);
-      }
-    }, 8000);
-
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, [navigate]);
-
   // ── Fetch All Bookings ────────────────────────────────
-  const fetchMyBookings = async (userId, token) => {
-    try {
-      const response = await axios.get(
-        `/booking/my-bookings/${userId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (response.data.success) {
-        setBookings(response.data.bookings);
-      }
-    } catch (error) {
-      console.log('Fetch error:', error);
-    } finally {
-      setLoading(false);
+// 👇 useCallback mein wrap karo
+const fetchMyBookings = useCallback(async (userId, token) => {
+  try {
+    const response = await axios.get(
+      `/booking/my-bookings/${userId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (response.data.success) {
+      setBookings(response.data.bookings);
     }
-  };
+  } catch (error) {
+    console.log('Fetch error:', error);
+  } finally {
+    setLoading(false);
+  }
+}, []); // ← empty array — function kabhi change nahi hoga
 
-  // ── Poll Only Searching Bookings ──────────────────────
-  // (Sirf woh bookings check karo jo abhi searching mein hain)
-  const pollSearchingBookings = useCallback(async (userId, token) => {
-    try {
-      const response = await axios.get(
-        `/booking/my-bookings/${userId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+// ── Poll Only Searching Bookings ──────────────────────
+const pollSearchingBookings = useCallback(async (userId, token) => {
+  try {
+    const response = await axios.get(
+      `/booking/my-bookings/${userId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
 
-      if (response.data.success) {
-        const freshBookings = response.data.bookings;
+    if (response.data.success) {
+      const freshBookings = response.data.bookings;
 
-        setBookings(prev => {
-          // Koi status change hua?
-          const hasChange = prev.some(oldBooking => {
-            const freshMatch = freshBookings.find(
-              fb => fb._id === oldBooking._id
-            );
-            return freshMatch && freshMatch.status !== oldBooking.status;
-          });
-
-          return hasChange ? freshBookings : prev;
+      setBookings(prev => {
+        const hasChange = prev.some(oldBooking => {
+          const freshMatch = freshBookings.find(
+            fb => fb._id === oldBooking._id
+          );
+          return freshMatch && freshMatch.status !== oldBooking.status;
         });
-      }
-    } catch (err) {
-      console.log('Polling error:', err);
+
+        return hasChange ? freshBookings : prev;
+      });
     }
-  }, []);
+  } catch (err) {
+    console.log('Polling error:', err);
+  }
+}, []); // ← empty array
+
+// ── Auth Check ────────────────────────────────────────
+useEffect(() => {
+  const savedUser = localStorage.getItem('user');
+  const token = localStorage.getItem('token');
+
+  if (!savedUser || !token) {
+    navigate('/login');
+    return;
+  }
+
+  const parsedUser = JSON.parse(savedUser);
+
+  if (parsedUser.role === 'worker') {
+    navigate('/worker-dashboard');
+    return;
+  }
+
+  setUser(parsedUser);
+  fetchMyBookings(parsedUser.id, token);
+
+  pollingRef.current = setInterval(() => {
+    const tkn = localStorage.getItem('token');
+    const usr = localStorage.getItem('user');
+    if (usr && tkn) {
+      const u = JSON.parse(usr);
+      pollSearchingBookings(u.id, tkn);
+    }
+  }, 8000);
+
+  return () => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+  };
+  // 👇 Dependencies mein add karo
+}, [navigate, fetchMyBookings, pollSearchingBookings]);
 
   // ── Cancel Booking ────────────────────────────────────
   const handleCancel = async (bookingId) => {

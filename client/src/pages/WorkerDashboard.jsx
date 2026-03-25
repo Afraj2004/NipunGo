@@ -19,42 +19,86 @@ function WorkerDashboard() {
   const pollingRef = useRef(null);
   const userRef = useRef(null);
 
-  // ── Auth + Init ──────────────────────────────────────
-  useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
-
-    if (!savedUser || !token) {
-      navigate('/login');
-      return;
-    }
-
-    const parsedUser = JSON.parse(savedUser);
-
-    if (parsedUser.role !== 'worker') {
-      navigate('/dashboard');
-      return;
-    }
-
-    setUser(parsedUser);
-    userRef.current = parsedUser;
-
-    // Initial fetch
-    fetchAllData(parsedUser.id, token);
-    fetchWorkerProfile(parsedUser.id);
-
-    // Polling — har 8 seconds mein naye requests check karo
-    pollingRef.current = setInterval(() => {
-      const tkn = localStorage.getItem('token');
-      if (userRef.current && tkn) {
-        fetchPendingRequests(userRef.current.id, tkn, false);
+  // ── Fetch Pending Requests ────────────────────────────
+// 👇 useCallback — pehle define karo useEffect se pehle
+const fetchPendingRequests = useCallback(
+  async (workerId, token) => {
+    try {
+      const response = await axios.get(
+        `/booking/worker-requests/${workerId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.data.success) {
+        setPendingRequests(response.data.requests);
       }
-    }, 8000);
+    } catch (err) {
+      console.log('Requests fetch error:', err);
+    }
+  },
+  [] // ← empty array
+);
 
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, [navigate]);
+// ── Fetch My Bookings ─────────────────────────────────
+const fetchMyBookings = useCallback(async (workerId, token) => {
+  try {
+    const response = await axios.get(
+      `/booking/worker-bookings/${workerId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (response.data.success) {
+      setMyBookings(response.data.bookings);
+    }
+  } catch (err) {
+    console.log('Bookings fetch error:', err);
+  }
+}, []); // ← empty array
+
+// ── Fetch All Data ────────────────────────────────────
+const fetchAllData = useCallback(async (workerId, token) => {
+  setLoading(true);
+  await Promise.all([
+    fetchPendingRequests(workerId, token),
+    fetchMyBookings(workerId, token)
+  ]);
+  setLoading(false);
+  // 👇 fetchPendingRequests aur fetchMyBookings dependency mein
+}, [fetchPendingRequests, fetchMyBookings]);
+
+// ── Auth + Init ───────────────────────────────────────
+useEffect(() => {
+  const savedUser = localStorage.getItem('user');
+  const token = localStorage.getItem('token');
+
+  if (!savedUser || !token) {
+    navigate('/login');
+    return;
+  }
+
+  const parsedUser = JSON.parse(savedUser);
+
+  if (parsedUser.role !== 'worker') {
+    navigate('/dashboard');
+    return;
+  }
+
+  setUser(parsedUser);
+  userRef.current = parsedUser;
+
+  fetchAllData(parsedUser.id, token);
+  fetchWorkerProfile(parsedUser.id);
+
+  pollingRef.current = setInterval(() => {
+    const tkn = localStorage.getItem('token');
+    if (userRef.current && tkn) {
+      fetchPendingRequests(userRef.current.id, tkn);
+    }
+  }, 8000);
+
+  return () => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+  };
+  // 👇 Dependencies mein add karo
+}, [navigate, fetchAllData, fetchPendingRequests]);
 
   // ── Worker Profile (availability) ────────────────────
   const fetchWorkerProfile = async (workerId) => {
@@ -68,48 +112,11 @@ function WorkerDashboard() {
     }
   };
 
-  // ── Fetch All Data ───────────────────────────────────
-  const fetchAllData = async (workerId, token) => {
-    setLoading(true);
-    await Promise.all([
-      fetchPendingRequests(workerId, token, false),
-      fetchMyBookings(workerId, token)
-    ]);
-    setLoading(false);
-  };
+ 
 
-  // ── Pending Requests ─────────────────────────────────
-  const fetchPendingRequests = useCallback(
-    async (workerId, token, showLoader = false) => {
-      try {
-        const response = await axios.get(
-          `/booking/worker-requests/${workerId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (response.data.success) {
-          setPendingRequests(response.data.requests);
-        }
-      } catch (err) {
-        console.log('Requests fetch error:', err);
-      }
-    },
-    []
-  );
 
-  // ── My Bookings (Confirmed/Completed) ────────────────
-  const fetchMyBookings = async (workerId, token) => {
-    try {
-      const response = await axios.get(
-        `/booking/worker-bookings/${workerId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (response.data.success) {
-        setMyBookings(response.data.bookings);
-      }
-    } catch (err) {
-      console.log('Bookings fetch error:', err);
-    }
-  };
+
+
 
   // ── Accept Request ───────────────────────────────────
   const handleAccept = async (bookingId) => {
