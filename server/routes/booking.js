@@ -46,28 +46,6 @@ router.get('/all', async (req, res) => {
   try {
     const bookings = await Booking.find()
       .populate('customer', 'name email phone')
-      .populate('worker', 'name service')
-      .sort({ createdAt: -1 });
-
-    res.json({
-      success: true,
-      bookings
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      message: 'Server Error!',
-      error: error.message
-    });
-  }
-});
-
-// Customer ki bookings dekho
-router.get('/my-bookings/:customerId', async (req, res) => {
-  try {
-    const bookings = await Booking.find({
-      customer: req.params.customerId
-    })
       .populate('worker', 'name service phone')
       .sort({ createdAt: -1 });
 
@@ -84,7 +62,79 @@ router.get('/my-bookings/:customerId', async (req, res) => {
   }
 });
 
-// Booking status update karo
+// Customer ki bookings
+router.get('/my-bookings/:customerId', async (req, res) => {
+  try {
+    const bookings = await Booking.find({
+      customer: req.params.customerId
+    })
+      .populate('worker', 'name service phone city rating')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      bookings
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: 'Server Error!',
+      error: error.message
+    });
+  }
+});
+
+// Worker ki bookings 👈 New!
+router.get('/worker-bookings/:workerId', async (req, res) => {
+  try {
+    const bookings = await Booking.find({
+      worker: req.params.workerId
+    })
+      .populate('customer', 'name email phone')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      bookings
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: 'Server Error!',
+      error: error.message
+    });
+  }
+});
+
+// Single booking
+router.get('/single/:bookingId', async (req, res) => {
+  try {
+    const booking = await Booking.findById(
+      req.params.bookingId
+    )
+      .populate('customer', 'name email phone')
+      .populate('worker', 'name service phone');
+
+    if (!booking) {
+      return res.status(404).json({
+        message: 'Booking nahi mili!'
+      });
+    }
+
+    res.json({
+      success: true,
+      booking
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: 'Server Error!',
+      error: error.message
+    });
+  }
+});
+
+// Booking status update
 router.put('/status/:bookingId', async (req, res) => {
   try {
     const { status } = req.body;
@@ -94,12 +144,6 @@ router.put('/status/:bookingId', async (req, res) => {
       { status },
       { new: true }
     );
-
-    if (!booking) {
-      return res.status(404).json({
-        message: 'Booking nahi mili!'
-      });
-    }
 
     res.json({
       success: true,
@@ -115,7 +159,7 @@ router.put('/status/:bookingId', async (req, res) => {
   }
 });
 
-// Booking cancel karo
+// Booking cancel
 router.put('/cancel/:bookingId', async (req, res) => {
   try {
     const booking = await Booking.findByIdAndUpdate(
@@ -123,12 +167,6 @@ router.put('/cancel/:bookingId', async (req, res) => {
       { status: 'Cancelled' },
       { new: true }
     );
-
-    if (!booking) {
-      return res.status(404).json({
-        message: 'Booking nahi mili!'
-      });
-    }
 
     res.json({
       success: true,
@@ -144,23 +182,41 @@ router.put('/cancel/:bookingId', async (req, res) => {
   }
 });
 
-// Single booking dekho
-router.get('/single/:bookingId', async (req, res) => {
+// Worker booking accept/reject 👈 New!
+router.put('/accept/:bookingId', async (req, res) => {
   try {
-    const booking = await Booking.findById(
-      req.params.bookingId
-    )
-      .populate('customer', 'name email')
-      .populate('worker', 'name service');
-
-    if (!booking) {
-      return res.status(404).json({
-        message: 'Booking nahi mili!'
-      });
-    }
+    const booking = await Booking.findByIdAndUpdate(
+      req.params.bookingId,
+      { status: 'Confirmed' },
+      { new: true }
+    ).populate('customer', 'name email phone');
 
     res.json({
       success: true,
+      message: 'Booking Accept Ho Gayi! ✅',
+      booking
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: 'Server Error!',
+      error: error.message
+    });
+  }
+});
+
+// Worker booking complete 👈 New!
+router.put('/complete/:bookingId', async (req, res) => {
+  try {
+    const booking = await Booking.findByIdAndUpdate(
+      req.params.bookingId,
+      { status: 'Completed' },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      message: 'Booking Complete Ho Gayi! 🎉',
       booking
     });
 

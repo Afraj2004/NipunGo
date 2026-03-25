@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import WorkerProfile from './pages/WorkerProfile';
 import AdminDashboard from './pages/AdminDashboard';
 import Review from './pages/Review';
+import WorkerDashboard from './pages/WorkerDashboard';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/booking/:serviceName" element={<Booking />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/worker-dashboard" element={<WorkerDashboard />} />
           <Route path="/worker/:workerId" element={<WorkerProfile />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/review/:bookingId" element={<Review />} />

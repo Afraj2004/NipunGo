@@ -37,11 +37,19 @@ function Navbar() {
   // Active link check
   const isActive = (path) => location.pathname === path;
 
-  const navLinks = [
-    { path: '/', label: 'Home', icon: '🏠' },
-    { path: '/services', label: 'Services', icon: '🔧' },
-    { path: '/dashboard', label: 'Dashboard', icon: '📋' },
-  ];
+  const users = JSON.parse(localStorage.getItem('user'));
+
+const navLinks = [
+  { path: '/', label: 'Home', icon: '🏠' },
+  { path: '/services', label: 'Services', icon: '🔧' },
+  {
+    path: users?.role === 'worker'
+      ? '/worker-dashboard'
+      : '/dashboard',
+    label: 'Dashboard',
+    icon: '📋'
+  },
+];
 
   return (
     <motion.nav
