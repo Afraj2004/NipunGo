@@ -19,11 +19,11 @@ app.use(cors({
 app.use(express.json());
 
 // ── Routes ──────────────────────────────────────
-app.use('/api/auth', require('./routes/auth'));
+app.use('/api/auth',    require('./routes/auth'));
 app.use('/api/booking', require('./routes/booking'));
-app.use('/api/worker', require('./routes/worker'));
-app.use('/api/admin', require('./routes/admin'));
-app.use('/api/review', require('./routes/review'));
+app.use('/api/worker',  require('./routes/worker'));
+app.use('/api/admin',   require('./routes/admin'));
+app.use('/api/review',  require('./routes/review'));
 app.use('/api/payment', require('./routes/payment'));
 
 // ── Health Check ────────────────────────────────
@@ -36,7 +36,9 @@ app.get('/', (req, res) => {
 });
 
 // ── 404 Handler ─────────────────────────────────
-app.use('*', (req, res) => {
+// ⚠️ '*' ki jagah '/{*splat}' use karo
+//    new path-to-regexp version mein '*' kaam nahi karta
+app.use('/{*splat}', (req, res) => {
   res.status(404).json({
     success: false,
     message: 'Route nahi mila!'
