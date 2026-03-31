@@ -70,13 +70,13 @@ const registerValidation = [
 ];
 
 const loginValidation = [
-  body('email')
+  body('emailOrPhone')
     .trim()
-    .notEmpty().withMessage('Email likhna zaroori hai!')
-    .isEmail().withMessage('Valid email likho!')
-    .normalizeEmail(),
+    .notEmpty()
+    .withMessage('Email ya Phone number likhna zaroori hai!'),
   body('password')
-    .notEmpty().withMessage('Password likhna zaroori hai!')
+    .notEmpty()
+    .withMessage('Password likhna zaroori hai!')
 ];
 
 // ── Validation Error Handler ──────────────────────────────
@@ -191,24 +191,46 @@ router.post(
     if (!handleValidationErrors(req, res)) return;
 
     try {
-      const { email, password } = req.body;
+      const { emailOrPhone, password } = req.body;
 
-      const user = await User.findOne({ email });
+      // 👇 Check karo — email hai ya phone?
+      const isEmail = emailOrPhone.includes('@');
+
+      let user;
+
+      if (isEmail) {
+        // Email se dhundo
+        const normalizedEmail = emailOrPhone
+          .toLowerCase()
+          .trim();
+        user = await User.findOne({ email: normalizedEmail });
+      } else {
+        // Phone se dhundo
+        const cleanPhone = emailOrPhone.trim();
+        user = await User.findOne({ phone: cleanPhone });
+      }
+
+      // User nahi mila
       if (!user) {
         return res.status(400).json({
           success: false,
-          message: 'Email ya password galat hai!'
+          message: 'Email/Phone ya password galat hai!'
         });
       }
 
-      const isMatch = await bcrypt.compare(password, user.password);
+      // Password check
+      const isMatch = await bcrypt.compare(
+        password,
+        user.password
+      );
       if (!isMatch) {
         return res.status(400).json({
           success: false,
-          message: 'Email ya password galat hai!'
+          message: 'Email/Phone ya password galat hai!'
         });
       }
 
+      // Token banao
       const token = jwt.sign(
         { id: user._id },
         process.env.JWT_SECRET,
