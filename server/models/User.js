@@ -11,7 +11,7 @@ const userSchema = new mongoose.Schema({
     default: 'customer'
   },
 
-  // ── Worker Fields ──────────────────────────
+  // ── Worker Fields ──────────────────────────────────────
   service: { type: String, default: '' },
   city: { type: String, default: '' },
   rating: { type: Number, default: 0 },
@@ -22,15 +22,19 @@ const userSchema = new mongoose.Schema({
   isVerified: { type: Boolean, default: false },
   isAvailable: { type: Boolean, default: true },
 
-  // 👇 NEW — Password Reset Fields
-  passwordResetToken: {
+  // 👇 NEW — Photo Fields
+  photoUrl: {
     type: String,
-    default: null
+    default: ''          // Cloudinary URL
   },
-  passwordResetExpiry: {
-    type: Date,
-    default: null
+  photoPublicId: {
+    type: String,
+    default: ''          // Cloudinary public_id (delete ke liye)
   },
+
+  // ── Password Reset ─────────────────────────────────────
+  passwordResetToken: { type: String, default: null },
+  passwordResetExpiry: { type: Date, default: null },
 
   createdAt: { type: Date, default: Date.now }
 });
