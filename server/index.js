@@ -127,7 +127,7 @@ app.get('/', (req, res) => {
 // ════════════════════════════════════════════════
 // 📌 404 HANDLER
 // ════════════════════════════════════════════════
-app.use('/{*splat}', (req, res) => {
+app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: 'Route nahi mila!',
