@@ -215,20 +215,50 @@ const fetchMyBookings = useCallback(async (userId, token) => {
 const [isChatOpen, setIsChatOpen] = useState(false);
 const [chatInput, setChatInput] = useState('');
 const [messages, setMessages] = useState([{ role: 'bot', text: 'Namaste! Main Nipun AI hoon. Aapki ghar ki kya samasya hai?' }]);
+const [aiSuggestion, setAiSuggestion] = useState(null); // To store { service: 'Plumber', price: 499 }
+const [isAiLoading, setIsAiLoading] = useState(false);
 
 const handleSendMessage = async () => {
   if (!chatInput.trim()) return;
-  const userMsg = { role: 'user', text: chatInput };
-  setMessages(prev => [...prev, userMsg]);
+
+  // const userMessage = { role: "user", parts: [{ text: chatInput }] };
+  setMessages(prev => [...prev, { role: 'user', text: chatInput }]); // For UI display
+  setIsAiLoading(true);
   setChatInput('');
 
   try {
-    const res = await axios.post('/chat/diagnose', { message: chatInput });
-    setMessages(prev => [...prev, { role: 'bot', text: res.data.reply }]);
+    const token = localStorage.getItem('token');
+    const res = await axios.post('/chat/message', { 
+      message: chatInput,
+      history: messages.map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }]
+      }))
+    }, { headers: { Authorization: `Bearer ${token}` } });
+
+    const reply = res.data.reply;
+    
+    // UI Update
+    setMessages(prev => [...prev, { role: 'bot', text: reply }]);
+
+    // Logic to catch the JSON suggestion from Gemini
+    if (reply.includes('{')) {
+      const jsonMatch = reply.match(/\{.*\}/s);
+      if (jsonMatch) {
+        const data = JSON.parse(jsonMatch[0]);
+        if (data.action === "BOOKING_SUGGESTION") {
+          setAiSuggestion(data); // This is where we define the suggestion
+        }
+      }
+    }
   } catch (err) {
-    console.error("Chat failed");
+    console.error("AI Chat Error:", err);
+  } finally {
+    setIsAiLoading(false);
   }
 };
+
+
 // ── Poll Only Searching Bookings ──────────────────────
 const pollSearchingBookings = useCallback(async (userId, token) => {
   try {
@@ -577,6 +607,8 @@ useEffect(() => {
             </motion.button>
           ))}
         </motion.div>
+
+
 <div className="fixed bottom-6 right-6 z-50">
   <AnimatePresence>
     {isChatOpen && (
@@ -590,13 +622,38 @@ useEffect(() => {
           <span>Nipun AI Expert 🤖</span>
           <button onClick={() => setIsChatOpen(false)}>✕</button>
         </div>
-        <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-2">
-          {messages.map((m, i) => (
-            <div key={i} className={`p-2 rounded-xl max-w-[80%] ${m.role === 'user' ? 'bg-indigo-100 self-end' : 'bg-gray-100 self-start'}`}>
-              <p className="text-sm">{m.text}</p>
-            </div>
-          ))}
-        </div>
+        {/* Inside the messages mapping area */}
+<div className="flex-1 p-4 overflow-y-auto flex flex-col gap-2">
+  {messages.map((m, i) => (
+    <div key={i} className={`p-3 rounded-2xl max-w-[85%] shadow-sm ${
+      m.role === 'user' ? 'bg-primary text-white self-end' : 'bg-gray-100 self-start text-gray-800'
+    }`}>
+      <p className="text-sm">{m.text.split('{')[0]}</p> {/* Hide the raw JSON from user */}
+    </div>
+  ))}
+  
+  {/* The "Smart" Suggestion Button */}
+  {aiSuggestion && (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-green-50 border border-green-200 p-3 rounded-xl mt-2"
+    >
+      <p className="text-xs text-green-700 font-bold mb-2">✨ Nipun AI Recommendation:</p>
+      <button 
+        onClick={() => {
+          setAiSuggestion(null);
+          navigate('/booking', { state: { service: aiSuggestion.service, price: aiSuggestion.price } });
+        }}
+        className="w-full bg-green-500 text-white py-2 rounded-lg text-xs font-bold shadow-md hover:bg-green-600 transition"
+      >
+        Book {aiSuggestion.service} now (₹{aiSuggestion.price})
+      </button>
+    </motion.div>
+  )}
+
+  {isAiLoading && <div className="text-xs text-gray-400 animate-pulse">Nipun AI is thinking...</div>}
+</div>
         <div className="p-3 border-t flex gap-2">
           <input 
             value={chatInput} 
@@ -616,6 +673,9 @@ useEffect(() => {
     💬
   </button>
 </div>
+
+
+
         {/* Bookings Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

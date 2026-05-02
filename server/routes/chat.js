@@ -1,27 +1,26 @@
 const express = require('express');
 const router = express.Router();
+const geminiModel = require('../config/gemini');
 const { protect } = require('../middleware/auth');
-// Assume you are using OpenAI or Gemini. Here's a generic implementation:
-// const { GoogleGenerativeAI } = require("@google/generative-ai"); 
 
-router.post('/diagnose', protect, async (req, res) => {
+router.post('/message', protect, async (req, res) => {
+  const { message, history } = req.body; // history: [{role: "user", parts: [{text: "..."}]}, ...]
+
   try {
-    const { message, history } = req.body;
+    const chat = geminiModel.startChat({ history });
+    const result = await chat.sendMessage(message);
+    const responseText = result.response.text();
 
-    // AI Prompt logic: We tell the AI it is a NipunGo Expert.
-    const systemPrompt = `You are the NipunGo Assistant. Help the user identify which home service they need (Plumber, Electrician, etc.). 
-    If they describe a leak, suggest a Plumber. If it's a sparking wire, an Electrician. 
-    Once identified, tell them to "Click the Book Now button below". Keep it professional and helpful.`;
-
-    // Here you would call your AI SDK (Gemini/OpenAI)
-    // const aiResponse = await model.generateContent([systemPrompt, ...history, message]);
-
-    // Placeholder response for development
-    const botReply = `Based on what you said, it sounds like you need an Expert ${message.includes('leak') ? 'Plumber' : 'Electrician'}. Would you like me to find one for you right now?`;
-
-    res.json({ success: true, reply: botReply });
+    // Check if Gemini suggested a booking in the response
+    const hasBookingIntent = responseText.includes("BOOKING_SUGGESTION");
+    
+    res.json({ 
+      success: true, 
+      reply: responseText,
+      intent: hasBookingIntent ? "book" : "chat" 
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Chat error" });
+    res.status(500).json({ success: false, message: "AI Error" });
   }
 });
 
