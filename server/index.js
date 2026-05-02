@@ -112,7 +112,7 @@ app.use('/api/worker',  require('./routes/worker'));
 app.use('/api/admin',   require('./routes/admin'));
 app.use('/api/review',  require('./routes/review'));
 app.use('/api/payment', require('./routes/payment'));
-
+app.use('/api/recommendations', require('./routes/recommendations'));
 // ════════════════════════════════════════════════
 // 📌 HEALTH CHECK
 // ════════════════════════════════════════════════

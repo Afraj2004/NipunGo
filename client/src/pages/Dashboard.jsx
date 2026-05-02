@@ -21,6 +21,7 @@ const getServiceIcon = (service) => {
   return icons[service] || '🔧';
 };
 
+
 const getStatusColor = (status) => {
   const colors = {
     'Searching': 'bg-orange-100 text-orange-600 border border-orange-200',
@@ -211,7 +212,23 @@ const fetchMyBookings = useCallback(async (userId, token) => {
     setLoading(false);
   }
 }, []); // ← empty array — function kabhi change nahi hoga
+const [isChatOpen, setIsChatOpen] = useState(false);
+const [chatInput, setChatInput] = useState('');
+const [messages, setMessages] = useState([{ role: 'bot', text: 'Namaste! Main Nipun AI hoon. Aapki ghar ki kya samasya hai?' }]);
 
+const handleSendMessage = async () => {
+  if (!chatInput.trim()) return;
+  const userMsg = { role: 'user', text: chatInput };
+  setMessages(prev => [...prev, userMsg]);
+  setChatInput('');
+
+  try {
+    const res = await axios.post('/chat/diagnose', { message: chatInput });
+    setMessages(prev => [...prev, { role: 'bot', text: res.data.reply }]);
+  } catch (err) {
+    console.error("Chat failed");
+  }
+};
 // ── Poll Only Searching Bookings ──────────────────────
 const pollSearchingBookings = useCallback(async (userId, token) => {
   try {
@@ -297,6 +314,21 @@ useEffect(() => {
       setCancellingId('');
     }
   };
+// Inside Dashboard component...
+const [suggestions, setSuggestions] = useState([]);
+
+useEffect(() => {
+  const fetchSuggestions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('/api/recommendations/suggested', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSuggestions(res.data.recommendations);
+    } catch (err) { console.log(err); }
+  };
+  fetchSuggestions();
+}, []);
 
   // ── Stats ─────────────────────────────────────────────
   const stats = {
@@ -349,6 +381,8 @@ useEffect(() => {
       </div>
     );
   }
+
+  
 
   // ── Main Render ───────────────────────────────────────
   return (
@@ -473,6 +507,25 @@ useEffect(() => {
           )}
         </AnimatePresence>
 
+<div className="mb-8">
+  <h2 className="text-white text-lg font-bold mb-3 flex items-center gap-2">
+    ✨ Suggested for Your Home
+  </h2>
+  <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
+    {suggestions.map((item, idx) => (
+      <motion.div
+        key={idx}
+        whileHover={{ scale: 1.05 }}
+        onClick={() => navigate('/booking', { state: { service: item } })}
+        className="flex-shrink-0 bg-white/20 backdrop-blur-md p-4 rounded-2xl 
+                   border border-white/30 min-w-[140px] cursor-pointer text-center"
+      >
+        <span className="text-3xl block mb-2">{getServiceIcon(item)}</span>
+        <span className="text-white font-medium text-sm">{item}</span>
+      </motion.div>
+    ))}
+  </div>
+</div>
         {/* Quick Actions */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -524,7 +577,45 @@ useEffect(() => {
             </motion.button>
           ))}
         </motion.div>
-
+<div className="fixed bottom-6 right-6 z-50">
+  <AnimatePresence>
+    {isChatOpen && (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.8, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.8, y: 20 }}
+        className="bg-white w-80 h-96 rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden border border-gray-200"
+      >
+        <div className="bg-primary p-4 text-white font-bold flex justify-between">
+          <span>Nipun AI Expert 🤖</span>
+          <button onClick={() => setIsChatOpen(false)}>✕</button>
+        </div>
+        <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-2">
+          {messages.map((m, i) => (
+            <div key={i} className={`p-2 rounded-xl max-w-[80%] ${m.role === 'user' ? 'bg-indigo-100 self-end' : 'bg-gray-100 self-start'}`}>
+              <p className="text-sm">{m.text}</p>
+            </div>
+          ))}
+        </div>
+        <div className="p-3 border-t flex gap-2">
+          <input 
+            value={chatInput} 
+            onChange={(e) => setChatInput(e.target.value)}
+            className="flex-1 border rounded-lg px-2 py-1 text-sm outline-none" 
+            placeholder="Describe your problem..."
+          />
+          <button onClick={handleSendMessage} className="bg-primary text-white px-3 py-1 rounded-lg">Send</button>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+  <button 
+    onClick={() => setIsChatOpen(!isChatOpen)}
+    className="bg-secondary w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl hover:scale-110 transition"
+  >
+    💬
+  </button>
+</div>
         {/* Bookings Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -822,6 +913,8 @@ useEffect(() => {
       </section>
     </div>
   );
+  
 }
+
 
 export default Dashboard;
