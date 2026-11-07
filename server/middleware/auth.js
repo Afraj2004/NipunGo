@@ -37,6 +37,17 @@ const protect = async (req, res, next) => {
       });
     }
 
+    // A password change/reset logs out every older session
+    if (
+      user.passwordChangedAt &&
+      Math.floor(user.passwordChangedAt.getTime() / 1000) > decoded.iat
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: 'Password badal gaya hai! Dobara login karo.'
+      });
+    }
+
     req.user = user;
     next();
 

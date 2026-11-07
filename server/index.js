@@ -7,11 +7,17 @@ const helmet    = require('helmet');
 const rateLimit = require('express-rate-limit');
 const mongoose  = require('mongoose');
 const connectDB = require('./config/db');
+const { sanitizeRequest } = require('./middleware/sanitize');
+const mailer = require('./utils/mailer');
 
 dotenv.config();
 connectDB();
 
 const app = express();
+
+// Render (and most hosts) sit behind a proxy: without this every visitor looks like
+// the same IP and rate limits would apply to everyone at once.
+app.set('trust proxy', 1);
 
 // ════════════════════════════════════════════════
 // 📌 CORS CONFIG
@@ -98,6 +104,7 @@ app.use(globalLimiter);
 
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(sanitizeRequest);
 
 // ════════════════════════════════════════════════
 // 📌 REQUEST LOGGER
@@ -210,5 +217,6 @@ app.listen(PORT, () => {
   console.log(`☁️   Cloudinary   : ${
     process.env.CLOUDINARY_CLOUD_NAME ? '✅ Configured' : '❌ .env missing!'
   }`);
+  console.log(`📧  Email        : ${mailer.describe()}`);
   console.log(`🗄️   MongoDB      : Connecting...`);
 });

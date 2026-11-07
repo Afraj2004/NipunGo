@@ -1,26 +1,10 @@
-const nodemailer = require('nodemailer');
+// All sending goes through ./mailer (Brevo API in production, Gmail SMTP locally)
+const transporter = require('./mailer');
 
-// ── Transporter ─────────────────────────────────────────
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
-
-// ── Verify Connection ────────────────────────────────────
-if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-  transporter.verify((error) => {
-    if (error) {
-      console.log('❌ Email service error:', error.message);
-    } else {
-      console.log('✅ Email service ready!');
-    }
-  });
-} else {
-  console.warn('⚠️  Email not configured (EMAIL_USER / EMAIL_PASS missing) — emails disabled');
-}
+const escapeHtml = (value) =>
+  String(value ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
 
 // ════════════════════════════════════════════════════════
 // 📌 EMAIL TEMPLATES
@@ -726,61 +710,42 @@ const sendBookingCancelledEmail = async ({
   });
 };
 
-// ── 7. Password Reset Email ───────────────────────────────
-const sendPasswordResetEmail = async ({
-  name,
-  email,
-  resetToken
-}) => {
-  const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+// ── 7. OTP Email (sign-up verification + password reset) ─
+const sendOtpEmail = async ({ name, email, otp, purpose, minutes = 10 }) => {
+  const isReset = purpose === 'reset';
+  const title = isReset ? 'Password Reset OTP 🔐' : 'Email Verify Karo ✉️';
+  const intro = isReset
+    ? 'aapne password reset request ki hai. Neeche diya OTP daalo.'
+    : 'NipunGo mein aapka swagat hai! Account banane ke liye neeche diya OTP daalo.';
 
   const content = `
-    <div class="greeting">
-      Password Reset Request 🔐
-    </div>
+    <div class="greeting">${title}</div>
     <p class="message">
-      <span class="highlight">${name}</span>,
-      aapne password reset request ki hai.
-      Neeche diye button par click karo
-      aur naya password set karo.
+      <span class="highlight">${escapeHtml(name || 'Hello')}</span>, ${intro}
     </p>
 
+    <div style="text-align:center;margin:24px 0;">
+      <div style="display:inline-block;font-size:34px;font-weight:800;letter-spacing:10px;color:#4f46e5;background:#eef2ff;border-radius:12px;padding:16px 24px;">
+        ${escapeHtml(otp)}
+      </div>
+    </div>
+
     <div class="alert-box">
-      ⏰ Yeh link sirf
-      <strong>15 minutes</strong>
-      tak valid hai!
+      ⏰ Yeh OTP sirf <strong>${minutes} minutes</strong> tak valid hai.
+      Ise kisi ke saath share mat karo.
     </div>
 
-    <a href="${resetUrl}" class="btn btn-block">
-      🔐 Naya Password Set Karo
-    </a>
-
-    <div class="card">
-      <div class="card-title">⚠️ Important</div>
-      <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
-        Agar aapne yeh request nahi ki toh
-        is email ko ignore karo.
-        Aapka account safe hai.
-        <br><br>
-        Link kaam na kare toh yeh URL
-        copy karo browser mein:
-        <br>
-        <span style="
-          color: #4f46e5;
-          font-size: 12px;
-          word-break: break-all;
-        ">
-          ${resetUrl}
-        </span>
-      </p>
-    </div>
+    <p class="message">
+      Agar aapne yeh request nahi ki toh is email ko ignore karo.
+      Aapka account safe hai.
+    </p>
   `;
 
   await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
     to: email,
-    subject: 'Password Reset — NipunGo 🔐',
-    html: baseTemplate(content)
+    subject: `${otp} is your NipunGo ${isReset ? 'password reset' : 'verification'} code`,
+    html: baseTemplate(content),
+    text: `OTP ${otp}`
   });
 };
 
@@ -792,5 +757,5 @@ module.exports = {
   sendNewJobEmail,
   sendBookingCompletedEmail,
   sendBookingCancelledEmail,
-  sendPasswordResetEmail
+  sendOtpEmail
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from '../utils/axios';
+import ForgotPasswordModal from '../components/ForgotPasswordModal';
 
 function Login() {
   const navigate = useNavigate();
@@ -16,10 +17,6 @@ function Login() {
 
   // ── Forgot Password States ────────────────────────────
   const [showForgotModal, setShowForgotModal] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotLoading, setForgotLoading] = useState(false);
-  const [forgotSuccess, setForgotSuccess] = useState('');
-  const [forgotError, setForgotError] = useState('');
 
   // ── Auth Check ────────────────────────────────────────
   useEffect(() => {
@@ -50,6 +47,7 @@ function Login() {
           'user',
           JSON.stringify(response.data.user)
         );
+        window.dispatchEvent(new Event('authchange'));
 
         // Role ke hisaab se redirect
         const { role } = response.data.user;
@@ -69,37 +67,6 @@ function Login() {
       );
     } finally {
       setLoading(false);
-    }
-  };
-
-  // ── Forgot Password Submit ────────────────────────────
-  const handleForgotPassword = async (e) => {
-    e.preventDefault();
-    setForgotLoading(true);
-    setForgotError('');
-    setForgotSuccess('');
-
-    try {
-      const response = await axios.post(
-        '/auth/forgot-password',
-        { email: forgotEmail }
-      );
-
-      if (response.data.success) {
-        setForgotSuccess(
-          'Reset link aapki email pe bheja gaya! ' +
-          'Inbox check karo. 📧'
-        );
-        setForgotEmail('');
-      }
-
-    } catch (err) {
-      setForgotError(
-        err.response?.data?.message ||
-        'Email send nahi ho saka!'
-      );
-    } finally {
-      setForgotLoading(false);
     }
   };
 
@@ -278,8 +245,6 @@ function Login() {
                   type="button"
                   onClick={() => {
                     setShowForgotModal(true);
-                    setForgotError('');
-                    setForgotSuccess('');
                   }}
                   className="text-primary text-sm
                     hover:underline font-medium"
@@ -367,182 +332,10 @@ function Login() {
         </div>
       </motion.div>
 
-      {/* ===== FORGOT PASSWORD MODAL ===== */}
-      <AnimatePresence>
-        {showForgotModal && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => {
-                setShowForgotModal(false);
-                setForgotSuccess('');
-                setForgotError('');
-              }}
-              className="fixed inset-0 bg-black
-                bg-opacity-50 z-50 backdrop-blur-sm"
-            />
-
-            {/* Modal */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="fixed inset-0 z-50 flex items-center
-                justify-center px-4"
-            >
-              <div className="bg-white rounded-2xl p-8
-                max-w-md w-full shadow-2xl">
-
-                {/* Modal Header */}
-                <div className="flex items-center
-                  justify-between mb-6">
-                  <div>
-                    <h3 className="text-xl font-bold
-                      text-gray-800">
-                      Password Reset 🔐
-                    </h3>
-                    <p className="text-gray-500 text-sm mt-1">
-                      Email pe reset link bheja jayega
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowForgotModal(false);
-                      setForgotSuccess('');
-                      setForgotError('');
-                    }}
-                    className="text-gray-400 hover:text-gray-600
-                      text-2xl leading-none"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                {/* Success Message */}
-                <AnimatePresence>
-                  {forgotSuccess && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-green-50 border
-                        border-green-200 text-green-700
-                        p-4 rounded-xl mb-4 text-sm"
-                    >
-                      ✅ {forgotSuccess}
-                    </motion.div>
-                  )}
-                  {forgotError && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-red-50 border border-red-200
-                        text-red-600 p-4 rounded-xl mb-4 text-sm"
-                    >
-                      ⚠️ {forgotError}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {!forgotSuccess ? (
-                  <form onSubmit={handleForgotPassword}>
-                    <div className="mb-4">
-                      <label className="block text-gray-700
-                        font-medium mb-2 text-sm">
-                        Registered Email Address
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-4
-                          top-1/2 -translate-y-1/2
-                          text-gray-400">
-                          📧
-                        </span>
-                        <input
-                          type="email"
-                          placeholder="apna@email.com"
-                          value={forgotEmail}
-                          onChange={(e) => {
-                            setForgotEmail(e.target.value);
-                            setForgotError('');
-                          }}
-                          required
-                          className="w-full pl-12 pr-4
-                            py-3.5 border border-gray-200
-                            rounded-xl outline-none
-                            focus:border-primary
-                            focus:ring-2 focus:ring-indigo-100
-                            transition"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-yellow-50 border
-                      border-yellow-100 rounded-xl p-3
-                      mb-4 text-xs text-yellow-700">
-                      ⏰ Reset link sirf 15 minutes
-                      tak valid rahega!
-                    </div>
-
-                    <div className="flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowForgotModal(false);
-                          setForgotSuccess('');
-                          setForgotError('');
-                        }}
-                        className="flex-1 border-2
-                          border-gray-200 text-gray-600
-                          py-3 rounded-xl font-medium
-                          hover:bg-gray-50 transition"
-                      >
-                        Cancel
-                      </button>
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        type="submit"
-                        disabled={forgotLoading}
-                        className="flex-1 bg-primary text-white
-                          py-3 rounded-xl font-bold
-                          hover:bg-indigo-700 transition
-                          disabled:opacity-70"
-                      >
-                        {forgotLoading
-                          ? '⏳ Sending...'
-                          : '📧 Link Bhejo'
-                        }
-                      </motion.button>
-                    </div>
-                  </form>
-                ) : (
-                  // Success State
-                  <div className="text-center py-4">
-                    <div className="text-5xl mb-4">📬</div>
-                    <p className="text-gray-600 text-sm mb-4">
-                      Inbox check karo — reset link
-                      bheja gaya hai!
-                    </p>
-                    <button
-                      onClick={() => {
-                        setShowForgotModal(false);
-                        setForgotSuccess('');
-                      }}
-                      className="w-full bg-primary text-white
-                        py-3 rounded-xl font-bold
-                        hover:bg-indigo-700 transition"
-                    >
-                      Theek Hai ✅
-                    </button>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      <ForgotPasswordModal
+        open={showForgotModal}
+        onClose={() => setShowForgotModal(false)}
+      />
 
     </div>
   );

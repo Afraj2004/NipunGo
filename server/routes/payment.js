@@ -53,7 +53,7 @@ router.post('/create-order', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: 'Payment Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -89,7 +89,7 @@ router.post('/verify', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: 'Verification Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });

@@ -105,7 +105,7 @@ router.post('/create', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -130,7 +130,7 @@ router.get('/worker-requests/:workerId', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false, message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -244,7 +244,7 @@ router.put('/accept/:bookingId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -304,7 +304,7 @@ router.put('/reject/:bookingId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -332,7 +332,7 @@ router.get('/my-bookings/:customerId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -358,7 +358,7 @@ router.get('/worker-bookings/:workerId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -394,7 +394,7 @@ router.get('/single/:bookingId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -463,7 +463,7 @@ router.put('/complete/:bookingId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -525,7 +525,7 @@ router.put('/cancel/:bookingId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -550,7 +550,7 @@ router.get('/all', adminOnly, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });

@@ -85,7 +85,7 @@ router.get('/stats', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -113,7 +113,7 @@ router.get('/users', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -142,7 +142,7 @@ router.get('/bookings', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -198,7 +198,7 @@ router.put(
       res.status(500).json({
         success: false,
         message: 'Server Error!',
-        error: error.message
+        error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
       });
     }
   }
@@ -255,7 +255,7 @@ router.put(
       res.status(500).json({
         success: false,
         message: 'Server Error!',
-        error: error.message
+        error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
       });
     }
   }
@@ -308,7 +308,7 @@ router.delete(
       res.status(500).json({
         success: false,
         message: 'Server Error!',
-        error: error.message
+        error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
       });
     }
   }
@@ -357,7 +357,7 @@ router.put(
       res.status(500).json({
         success: false,
         message: 'Server Error!',
-        error: error.message
+        error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
       });
     }
   }

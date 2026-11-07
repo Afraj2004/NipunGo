@@ -95,7 +95,7 @@ router.get('/all', optionalAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error:   error.message,
+      error:   (process.env.NODE_ENV === 'development' ? error.message : undefined),
     });
   }
 });
@@ -117,7 +117,7 @@ router.get('/service/:serviceName', optionalAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error:   error.message,
+      error:   (process.env.NODE_ENV === 'development' ? error.message : undefined),
     });
   }
 });
@@ -160,7 +160,7 @@ router.put('/availability/:workerId', protect, selfOrAdmin, async (req, res) => 
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error:   error.message,
+      error:   (process.env.NODE_ENV === 'development' ? error.message : undefined),
     });
   }
 });
@@ -215,7 +215,7 @@ router.put('/update/:workerId', protect, selfOrAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error:   error.message,
+      error:   (process.env.NODE_ENV === 'development' ? error.message : undefined),
     });
   }
 });
@@ -325,7 +325,7 @@ router.put(
       res.status(500).json({
         success: false,
         message: 'Photo upload nahi ho saki!',
-        error:   error.message,
+        error:   (process.env.NODE_ENV === 'development' ? error.message : undefined),
       });
     }
   }
@@ -380,7 +380,7 @@ router.delete('/delete-photo/:workerId', protect, selfOrAdmin, async (req, res) 
     res.status(500).json({
       success: false,
       message: 'Photo delete nahi ho saki!',
-      error:   error.message,
+      error:   (process.env.NODE_ENV === 'development' ? error.message : undefined),
     });
   }
 });
@@ -408,7 +408,7 @@ router.get('/:workerId', optionalAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server Error!',
-      error:   error.message,
+      error:   (process.env.NODE_ENV === 'development' ? error.message : undefined),
     });
   }
 });

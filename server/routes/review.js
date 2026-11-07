@@ -5,10 +5,9 @@ const User = require('../models/User');
 const Booking = require('../models/Booking');
 const { protect } = require('../middleware/auth');
 
-router.use(protect);
 
 // Review add karo
-router.post('/add', async (req, res) => {
+router.post('/add', protect, async (req, res) => {
   try {
     const { booking, rating, comment } = req.body;
 
@@ -76,7 +75,7 @@ router.post('/add', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
@@ -98,14 +97,23 @@ router.get('/worker/:workerId', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });
 
 // Booking ka review check karo
-router.get('/booking/:bookingId', async (req, res) => {
+router.get('/booking/:bookingId', protect, async (req, res) => {
   try {
+    const bookingDoc = await Booking.findById(req.params.bookingId);
+    const involved = bookingDoc && (
+      String(bookingDoc.customer) === String(req.user.id) ||
+      String(bookingDoc.assignedWorker) === String(req.user.id) ||
+      req.user.role === 'admin'
+    );
+    if (!involved) {
+      return res.status(403).json({ success: false, message: 'Aapko is booking ka access nahi hai!' });
+    }
     const review = await Review.findOne({
       booking: req.params.bookingId
     });
@@ -118,7 +126,7 @@ router.get('/booking/:bookingId', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: 'Server Error!',
-      error: error.message
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
     });
   }
 });

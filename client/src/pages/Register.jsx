@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from '../utils/axios';
+import OtpInput, { useCountdown } from '../components/OtpInput';
+
+const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{8,72}$/;
 
 function Register() {
   const navigate = useNavigate();
@@ -17,6 +20,8 @@ function Register() {
   const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState(1);
+  const [otp, setOtp] = useState('');
+  const [resendIn, setResendIn] = useCountdown(0);
 
   // Agar user pehle se login hai toh home par bhejo
   useEffect(() => {
@@ -43,40 +48,72 @@ function Register() {
     setStep(2);
   };
 
+  const finishLogin = (data) => {
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    window.dispatchEvent(new Event('authchange'));
+    setSuccess('Account ban gaya! 🎉');
+    setTimeout(() => navigate('/'), 1200);
+  };
+
+  // Step 2 -> email an OTP (no account exists until it is verified)
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
 
+    if (!PASSWORD_RULE.test(formData.password)) {
+      setError('Password kam se kam 8 characters ka ho, usme ek letter aur ek number zaroor ho!');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const response = await axios.post(
-        '/auth/register',
-        formData
-      );
-
+      const response = await axios.post('/auth/register/start', formData);
       if (response.data.success) {
-        localStorage.setItem(
-          'token',
-          response.data.token
-        );
-        localStorage.setItem(
-          'user',
-          JSON.stringify(response.data.user)
-        );
-
-        setSuccess('Account ban gaya! 🎉');
-        setTimeout(() => {
-          navigate('/');
-        }, 1500);
+        setOtp('');
+        setResendIn(response.data.resendAfterSeconds || 30);
+        setStep(3);
       }
-
-    } catch (error) {
-      setError(
-        error.response?.data?.message ||
-        'Kuch galat hua!'
-      );
+    } catch (err) {
+      setError(err.response?.data?.message || 'Kuch galat hua!');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Step 3 -> check the OTP and create the account
+  const handleVerify = async (e) => {
+    e.preventDefault();
+    if (otp.length !== 6) {
+      setError('6 digit ka OTP daalo!');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const response = await axios.post('/auth/register/verify', {
+        email: formData.email,
+        otp,
+      });
+      if (response.data.success) finishLogin(response.data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Kuch galat hua!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError('');
+    try {
+      const response = await axios.post('/auth/register/resend', { email: formData.email });
+      setOtp('');
+      setResendIn(response.data.resendAfterSeconds || 30);
+      setSuccess('Naya OTP bhej diya gaya hai!');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'OTP nahi bhej paye!');
+      if (err.response?.data?.retryAfter) setResendIn(err.response.data.retryAfter);
     }
   };
 
@@ -182,26 +219,28 @@ function Register() {
 
           {/* Progress Steps */}
           <div className="flex items-center gap-2 mb-8">
-            <div className={`flex-1 h-2 rounded-full transition-all duration-300 ${
-              step >= 1 ? 'bg-primary' : 'bg-gray-200'
-            }`}></div>
-            <div className={`flex-1 h-2 rounded-full transition-all duration-300 ${
-              step >= 2 ? 'bg-primary' : 'bg-gray-200'
-            }`}></div>
+            {[1, 2, 3].map((n) => (
+              <div
+                key={n}
+                className={`flex-1 h-2 rounded-full transition-all duration-300 ${
+                  step >= n ? 'bg-primary' : 'bg-gray-200'
+                }`}
+              ></div>
+            ))}
           </div>
 
           {/* Step Labels */}
-          <div className="flex justify-between mb-6">
-            <span className={`text-sm font-medium ${
-              step >= 1 ? 'text-primary' : 'text-gray-400'
-            }`}>
-              Basic Info
-            </span>
-            <span className={`text-sm font-medium ${
-              step >= 2 ? 'text-primary' : 'text-gray-400'
-            }`}>
-              Account Setup
-            </span>
+          <div className="grid grid-cols-3 mb-6 text-sm font-medium">
+            {['Basic Info', 'Account Setup', 'Verify Email'].map((label, i) => (
+              <span
+                key={label}
+                className={`${i === 0 ? 'text-left' : i === 2 ? 'text-right' : 'text-center'} ${
+                  step >= i + 1 ? 'text-primary' : 'text-gray-400'
+                }`}
+              >
+                {label}
+              </span>
+            ))}
           </div>
 
           {/* Error */}
@@ -375,7 +414,9 @@ function Register() {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     name="password"
-                    placeholder="Strong password likho"
+                    placeholder="8+ characters, letter + number"
+                    minLength={8}
+                    autoComplete="new-password"
                     value={formData.password}
                     onChange={handleChange}
                     required
@@ -409,8 +450,58 @@ function Register() {
                   disabled={loading}
                   className="flex-1 bg-primary text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
                 >
-                  {loading ? '⏳ Wait...' : 'Register ✨'}
+                  {loading ? '⏳ OTP bhej rahe hain...' : 'OTP Bhejo →'}
                 </motion.button>
+              </div>
+            </motion.form>
+          )}
+
+          {/* Step 3 — verify the emailed OTP */}
+          {step === 3 && (
+            <motion.form
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              onSubmit={handleVerify}
+            >
+              <p className="text-gray-600 mb-1">
+                Humne 6 digit ka OTP bheja hai:
+              </p>
+              <p className="font-semibold text-gray-800 mb-5 break-all">
+                {formData.email}
+              </p>
+
+              <OtpInput value={otp} onChange={(v) => { setOtp(v); setError(''); }} length={6} />
+
+              <p className="text-sm text-gray-500 mt-3 mb-6 text-center">
+                Email nahi mili? Spam folder bhi check karo.{' '}
+                {resendIn > 0 ? (
+                  <span className="text-gray-400">{resendIn}s mein dobara bhej sakte ho</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    className="text-primary font-semibold hover:underline"
+                  >
+                    OTP dobara bhejo
+                  </button>
+                )}
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setStep(1); setOtp(''); setError(''); }}
+                  className="flex-1 border-2 border-gray-200 text-gray-600 py-4 rounded-xl font-bold hover:bg-gray-50 transition"
+                >
+                  ← Email badlo
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || otp.length !== 6}
+                  className="flex-1 bg-primary text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 disabled:opacity-60"
+                >
+                  {loading ? '⏳ Wait...' : 'Verify ✨'}
+                </button>
               </div>
             </motion.form>
           )}

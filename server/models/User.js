@@ -32,7 +32,10 @@ const userSchema = new mongoose.Schema({
     default: ''          // Cloudinary public_id (delete ke liye)
   },
 
-  // ── Password Reset ─────────────────────────────────────
+  // Tokens issued before this moment are rejected (set on password reset)
+  passwordChangedAt: { type: Date, default: null },
+
+  // Legacy fields from the old link-based reset (no longer used)
   passwordResetToken: { type: String, default: null },
   passwordResetExpiry: { type: Date, default: null },
 
