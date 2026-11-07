@@ -228,9 +228,10 @@ const handleSendMessage = async () => {
 
   try {
     const token = localStorage.getItem('token');
-    const res = await axios.post('/chat/message', { 
+    const res = await axios.post('/chat/message', {
       message: chatInput,
-      history: messages.map(m => ({
+      // Gemini history must start with a user turn, so skip the bot greeting
+      history: messages.slice(1).map(m => ({
         role: m.role === 'user' ? 'user' : 'model',
         parts: [{ text: m.text }]
       }))
@@ -245,9 +246,13 @@ const handleSendMessage = async () => {
     if (reply.includes('{')) {
       const jsonMatch = reply.match(/\{.*\}/s);
       if (jsonMatch) {
-        const data = JSON.parse(jsonMatch[0]);
-        if (data.action === "BOOKING_SUGGESTION") {
-          setAiSuggestion(data); // This is where we define the suggestion
+        try {
+          const data = JSON.parse(jsonMatch[0]);
+          if (data.action === "BOOKING_SUGGESTION") {
+            setAiSuggestion(data);
+          }
+        } catch (parseErr) {
+          // Reply had braces but no valid JSON — just show the text
         }
       }
     }
@@ -351,7 +356,7 @@ useEffect(() => {
   const fetchSuggestions = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('/api/recommendations/suggested', {
+      const res = await axios.get('/recommendations/suggested', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSuggestions(res.data.recommendations);

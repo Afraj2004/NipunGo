@@ -113,6 +113,7 @@ app.use('/api/admin',   require('./routes/admin'));
 app.use('/api/review',  require('./routes/review'));
 app.use('/api/payment', require('./routes/payment'));
 app.use('/api/recommendations', require('./routes/recommendations'));
+app.use('/api/chat',    require('./routes/chat'));
 // ════════════════════════════════════════════════
 // 📌 HEALTH CHECK
 // ════════════════════════════════════════════════
