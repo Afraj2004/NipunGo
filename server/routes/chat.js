@@ -21,7 +21,11 @@ router.post('/message', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Gemini error:', error.message);
-    res.status(500).json({ success: false, message: 'AI Error' });
+    const notConfigured = /GEMINI_API_KEY/.test(error.message);
+    res.status(notConfigured ? 503 : 500).json({
+      success: false,
+      message: notConfigured ? 'AI is not configured on the server' : 'AI Error',
+    });
   }
 });
 

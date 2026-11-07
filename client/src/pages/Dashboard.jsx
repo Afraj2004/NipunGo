@@ -217,6 +217,11 @@ const [chatInput, setChatInput] = useState('');
 const [messages, setMessages] = useState([{ role: 'bot', text: 'Namaste! Main Nipun AI hoon. Aapki ghar ki kya samasya hai?' }]);
 const [aiSuggestion, setAiSuggestion] = useState(null); // To store { service: 'Plumber', price: 499 }
 const [isAiLoading, setIsAiLoading] = useState(false);
+const chatEndRef = useRef(null);
+
+useEffect(() => {
+  chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+}, [messages, isAiLoading, isChatOpen]);
 
 const handleSendMessage = async () => {
   if (!chatInput.trim()) return;
@@ -628,19 +633,19 @@ useEffect(() => {
         initial={{ opacity: 0, scale: 0.8, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.8, y: 20 }}
-        className="bg-white w-80 h-96 rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden border border-gray-200"
+        className="bg-white w-[26rem] max-w-[calc(100vw-2rem)] h-[34rem] max-h-[75vh] rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden border border-gray-200"
       >
-        <div className="bg-primary p-4 text-white font-bold flex justify-between">
+        <div className="bg-primary p-5 text-white font-bold text-lg flex justify-between items-center">
           <span>Nipun AI Expert 🤖</span>
-          <button onClick={() => setIsChatOpen(false)}>✕</button>
+          <button onClick={() => setIsChatOpen(false)} className="text-xl px-2" aria-label="Close chat">✕</button>
         </div>
         {/* Inside the messages mapping area */}
-<div className="flex-1 p-4 overflow-y-auto flex flex-col gap-2">
+<div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
   {messages.map((m, i) => (
-    <div key={i} className={`p-3 rounded-2xl max-w-[85%] shadow-sm ${
+    <div key={i} className={`px-4 py-3 rounded-2xl max-w-[88%] shadow-sm ${
       m.role === 'user' ? 'bg-primary text-white self-end' : 'bg-gray-100 self-start text-gray-800'
     }`}>
-      <p className="text-sm">{m.text.split('{')[0]}</p> {/* Hide the raw JSON from user */}
+      <p className="text-base leading-relaxed whitespace-pre-wrap">{m.text.split(/```|\{/)[0].trim()}</p> {/* Hide the raw JSON from user */}
     </div>
   ))}
   
@@ -651,36 +656,38 @@ useEffect(() => {
       animate={{ opacity: 1, y: 0 }}
       className="bg-green-50 border border-green-200 p-3 rounded-xl mt-2"
     >
-      <p className="text-xs text-green-700 font-bold mb-2">✨ Nipun AI Recommendation:</p>
+      <p className="text-sm text-green-700 font-bold mb-2">✨ Nipun AI Recommendation:</p>
       <button 
         onClick={() => {
           setAiSuggestion(null);
           navigate('/booking', { state: { service: aiSuggestion.service, price: aiSuggestion.price } });
         }}
-        className="w-full bg-green-500 text-white py-2 rounded-lg text-xs font-bold shadow-md hover:bg-green-600 transition"
+        className="w-full bg-green-500 text-white py-3 rounded-lg text-sm font-bold shadow-md hover:bg-green-600 transition"
       >
         Book {aiSuggestion.service} now (₹{aiSuggestion.price})
       </button>
     </motion.div>
   )}
 
-  {isAiLoading && <div className="text-xs text-gray-400 animate-pulse">Nipun AI is thinking...</div>}
+  {isAiLoading && <div className="text-sm text-gray-400 animate-pulse">Nipun AI is thinking...</div>}
+  <div ref={chatEndRef} />
 </div>
-        <div className="p-3 border-t flex gap-2">
+        <div className="p-4 border-t flex gap-3">
           <input 
             value={chatInput} 
             onChange={(e) => setChatInput(e.target.value)}
-            className="flex-1 border rounded-lg px-2 py-1 text-sm outline-none" 
+            onKeyDown={(e) => { if (e.key === 'Enter' && !isAiLoading) handleSendMessage(); }}
+            className="flex-1 border rounded-xl px-4 py-3 text-base outline-none focus:border-primary" 
             placeholder="Describe your problem..."
           />
-          <button onClick={handleSendMessage} className="bg-primary text-white px-3 py-1 rounded-lg">Send</button>
+          <button onClick={handleSendMessage} disabled={isAiLoading} className="bg-primary text-white px-5 py-3 rounded-xl font-semibold disabled:opacity-60">Send</button>
         </div>
       </motion.div>
     )}
   </AnimatePresence>
   <button 
     onClick={() => setIsChatOpen(!isChatOpen)}
-    className="bg-secondary w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl hover:scale-110 transition"
+    className="bg-secondary w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-3xl hover:scale-110 transition"
   >
     💬
   </button>

@@ -125,6 +125,7 @@ app.get('/', (req, res) => {
     status:   'OK',
     secured:  true,
     cors:     'Active ✅',
+    ai:       process.env.GEMINI_API_KEY ? 'configured' : 'missing GEMINI_API_KEY',
   });
 });
 
