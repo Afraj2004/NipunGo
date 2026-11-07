@@ -258,6 +258,13 @@ const handleSendMessage = async () => {
     }
   } catch (err) {
     console.error("AI Chat Error:", err);
+    const expired = err.response?.status === 401;
+    setMessages(prev => [...prev, {
+      role: 'bot',
+      text: expired
+        ? 'Aapka session expire ho gaya hai. Please dobara login karo.'
+        : 'Nipun AI abhi available nahi hai. Thodi der baad dobara try karo. 🙏'
+    }]);
   } finally {
     setIsAiLoading(false);
   }
