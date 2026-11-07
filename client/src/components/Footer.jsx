@@ -104,8 +104,8 @@ function Footer() {
           <div className="lg:col-span-2">
             <Link to="/">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold text-lg">
-                  N
+                <div className="bg-white rounded-xl p-1.5">
+                  <img src="/brand/logo-icon.png" alt="NipunGo logo" className="h-9 w-auto" />
                 </div>
                 <h2 className="text-2xl font-bold">
                   Nipun<span className="text-secondary">Go</span>

@@ -130,12 +130,8 @@ function Login() {
           transition={{ delay: 0.3 }}
           className="text-center z-10"
         >
-          <div className="w-20 h-20 bg-white bg-opacity-20
-            rounded-2xl flex items-center justify-center
-            text-white font-bold text-4xl mx-auto mb-6
-            backdrop-blur-sm border border-white
-            border-opacity-30">
-            N
+          <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg p-3">
+            <img src="/brand/logo-icon.png" alt="NipunGo logo" className="w-full h-auto" />
           </div>
           <h1 className="text-4xl font-bold text-white mb-4">
             Nipun<span className="text-secondary">Go</span>
@@ -194,11 +190,7 @@ function Login() {
               to="/"
               className="flex items-center gap-2 mb-8 lg:hidden"
             >
-              <div className="w-9 h-9 bg-primary rounded-xl
-                flex items-center justify-center
-                text-white font-bold">
-                N
-              </div>
+              <img src="/brand/logo-icon.png" alt="NipunGo logo" className="h-10 w-auto" />
               <span className="text-2xl font-bold">
                 <span className="text-primary">Nipun</span>
                 <span className="text-secondary">Go</span>

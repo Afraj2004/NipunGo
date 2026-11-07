@@ -72,9 +72,7 @@ const navLinks = [
               whileTap={{ scale: 0.95 }}
               className="flex items-center gap-2"
             >
-              <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md">
-                N
-              </div>
+              <img src="/brand/logo-icon.png" alt="NipunGo logo" className="h-10 w-auto" />
               <h1 className="text-2xl font-bold">
                 <span className="text-primary">Nipun</span>
                 <span className="text-secondary">Go</span>
