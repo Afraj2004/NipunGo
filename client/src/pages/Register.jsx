@@ -1,19 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from '../utils/axios';
 import OtpInput, { useCountdown } from '../components/OtpInput';
+import { saveSession } from '../utils/auth';
+import { SERVICE_PRICES } from '../data/chatKnowledge';
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{8,72}$/;
 
-function Register() {
+function Register({ portal = 'customer' }) {
+  const isWorker = portal === 'worker';
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
     password: '',
-    role: 'customer'
+    service: '',
+    city: '',
+    experience: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -22,14 +27,6 @@ function Register() {
   const [step, setStep] = useState(1);
   const [otp, setOtp] = useState('');
   const [resendIn, setResendIn] = useCountdown(0);
-
-  // Agar user pehle se login hai toh home par bhejo
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      navigate('/');
-    }
-  }, [navigate]);
 
   const handleChange = (e) => {
     setFormData({
@@ -44,16 +41,21 @@ function Register() {
       setError('Naam aur email zaroori hai!');
       return;
     }
+    if (isWorker && (!formData.service || formData.city.trim().length < 2)) {
+      setError('Apni service aur city batao!');
+      return;
+    }
     setError('');
     setStep(2);
   };
 
   const finishLogin = (data) => {
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    window.dispatchEvent(new Event('authchange'));
+    saveSession(data);
     setSuccess('Account ban gaya! 🎉');
-    setTimeout(() => navigate('/'), 1200);
+    setTimeout(
+      () => navigate(data.user.role === 'worker' ? '/worker/dashboard' : '/', { replace: true }),
+      1200
+    );
   };
 
   // Step 2 -> email an OTP (no account exists until it is verified)
@@ -68,7 +70,14 @@ function Register() {
 
     setLoading(true);
     try {
-      const response = await axios.post('/auth/register/start', formData);
+      // Customers only ever send the core fields; workers also say what they do and where
+      const { name, email, phone, password, service, city, experience } = formData;
+      const payload = {
+        name, email, phone, password,
+        role: isWorker ? 'worker' : 'customer',
+        ...(isWorker ? { service, city: city.trim(), experience: experience.trim() } : {}),
+      };
+      const response = await axios.post('/auth/register/start', payload);
       if (response.data.success) {
         setOtp('');
         setResendIn(response.data.resendAfterSeconds || 30);
@@ -145,7 +154,7 @@ function Register() {
             Nipun<span className="text-secondary">Go</span>
           </h1>
           <p className="text-indigo-200 text-xl mb-12">
-            Join Thousands of Happy Customers!
+            {isWorker ? 'Naye customers tak pahucho!' : 'Join Thousands of Happy Customers!'}
           </p>
 
           {/* Stats */}
@@ -210,10 +219,12 @@ function Register() {
             </Link>
 
             <h2 className="text-3xl font-bold text-gray-800 mb-2">
-              Join NipunGo! ✨
+              {isWorker ? 'Join as a Worker 👷' : 'Join NipunGo! ✨'}
             </h2>
             <p className="text-gray-500">
-              Free account banao aur services book karo
+              {isWorker
+                ? 'Apna kaam dikhao aur nayi jobs pao'
+                : 'Free account banao aur services book karo'}
             </p>
           </motion.div>
 
@@ -316,50 +327,61 @@ function Register() {
                 </div>
               </div>
 
-              {/* Role Selection */}
-              <div className="mb-6">
-                <label className="block text-gray-700 font-medium mb-3">
-                  Aap Kaun Hain?
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setFormData({
-                      ...formData,
-                      role: 'customer'
-                    })}
-                    className={`p-4 rounded-xl border-2 text-center transition ${
-                      formData.role === 'customer'
-                        ? 'border-primary bg-indigo-50 text-primary'
-                        : 'border-gray-200 text-gray-600 hover:border-indigo-200'
-                    }`}
-                  >
-                    <div className="text-2xl mb-1">👤</div>
-                    <div className="font-medium text-sm">Customer</div>
-                    <div className="text-xs text-gray-400">
-                      Service Chahiye
+              {/* Worker sign-up: what you do and where */}
+              {isWorker && (
+                <>
+                  <div className="mb-4">
+                    <label htmlFor="service" className="block text-gray-700 font-medium mb-2">
+                      Aap kaunsi service doge?
+                    </label>
+                    <select
+                      id="service"
+                      name="service"
+                      value={formData.service}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3.5 border border-gray-200 rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-indigo-100 transition bg-white"
+                    >
+                      <option value="">Service chuno</option>
+                      {Object.keys(SERVICE_PRICES).map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                    <div>
+                      <label htmlFor="city" className="block text-gray-700 font-medium mb-2">City</label>
+                      <input
+                        id="city"
+                        type="text"
+                        name="city"
+                        placeholder="Jaise Pune"
+                        value={formData.city}
+                        onChange={handleChange}
+                        required
+                        maxLength={50}
+                        className="w-full px-4 py-3.5 border border-gray-200 rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-indigo-100 transition bg-white"
+                      />
                     </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData({
-                      ...formData,
-                      role: 'worker'
-                    })}
-                    className={`p-4 rounded-xl border-2 text-center transition ${
-                      formData.role === 'worker'
-                        ? 'border-primary bg-indigo-50 text-primary'
-                        : 'border-gray-200 text-gray-600 hover:border-indigo-200'
-                    }`}
-                  >
-                    <div className="text-2xl mb-1">👷</div>
-                    <div className="font-medium text-sm">Worker</div>
-                    <div className="text-xs text-gray-400">
-                      Service Dunga
+                    <div>
+                      <label htmlFor="experience" className="block text-gray-700 font-medium mb-2">
+                        Experience <span className="text-gray-400 font-normal">(optional)</span>
+                      </label>
+                      <input
+                        id="experience"
+                        type="text"
+                        name="experience"
+                        placeholder="Jaise 3 saal"
+                        value={formData.experience}
+                        onChange={handleChange}
+                        maxLength={40}
+                        className="w-full px-4 py-3.5 border border-gray-200 rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-indigo-100 transition bg-white"
+                      />
                     </div>
-                  </button>
-                </div>
-              </div>
+                  </div>
+                </>
+              )}
+              {!isWorker && <div className="mb-2" />}
 
               <motion.button
                 whileHover={{ scale: 1.02 }}
@@ -510,7 +532,7 @@ function Register() {
           <p className="text-center text-gray-500 mt-6">
             Pehle se account hai?{" "}
             <Link
-              to="/login"
+              to={isWorker ? '/worker/login' : '/login'}
               className="text-primary font-bold hover:underline"
             >
               Login Karo →

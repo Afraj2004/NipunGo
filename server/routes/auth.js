@@ -17,6 +17,7 @@ const {
   PASSWORD_MESSAGE,
 } = require('../utils/otp');
 const { protect } = require('../middleware/auth');
+const { SERVICE_PRICES } = require('../config/services');
 
 // ── OTP settings ──────────────────────────────────────────
 const OTP_MINUTES = 10;          // how long a code stays valid
@@ -97,6 +98,20 @@ const registerValidation = [
   body('role')
     .optional()
     .isIn(['customer', 'worker']).withMessage('Role sirf customer ya worker ho sakta hai!'),
+  // Workers must say what they do and where (customers never send these)
+  body('service')
+    .if(body('role').equals('worker'))
+    .custom((v) => typeof v === 'string' && Object.prototype.hasOwnProperty.call(SERVICE_PRICES, v))
+    .withMessage('Apni service chuno!'),
+  body('city')
+    .if(body('role').equals('worker'))
+    .isString().withMessage('City likhna zaroori hai!')
+    .trim()
+    .isLength({ min: 2, max: 50 }).withMessage('City 2-50 characters ki honi chahiye!'),
+  body('experience')
+    .optional({ values: 'falsy' })
+    .isString().trim()
+    .isLength({ max: 40 }).withMessage('Experience bahut lamba hai!'),
 ];
 
 const loginValidation = [
@@ -220,6 +235,14 @@ router.post('/register/start', otpStartLimiter, registerValidation, async (req, 
   try {
     const { name, email, phone, password } = req.body;
     const role = req.body.role === 'worker' ? 'worker' : 'customer';
+    const workerDetails =
+      role === 'worker'
+        ? {
+            service: req.body.service,
+            city: String(req.body.city).trim(),
+            experience: String(req.body.experience || '').trim(),
+          }
+        : {};
 
     if (await User.findOne({ email })) {
       return res.status(400).json({ success: false, message: 'Yeh email pehle se registered hai!' });
@@ -239,7 +262,7 @@ router.post('/register/start', otpStartLimiter, registerValidation, async (req, 
       email,
       purpose: 'register',
       name: name.trim(),
-      payload: { name: name.trim(), phone, passwordHash, role },
+      payload: { name: name.trim(), phone, passwordHash, role, ...workerDetails },
       existing,
     });
 
@@ -301,7 +324,7 @@ router.post('/register/verify', otpVerifyLimiter, [emailRule, otpRule], async (r
       return res.status(result.status).json({ success: false, message: result.message });
     }
 
-    const { name, phone, passwordHash, role } = result.doc.payload || {};
+    const { name, phone, passwordHash, role, service, city, experience } = result.doc.payload || {};
     if (!name || !phone || !passwordHash) {
       await Otp.deleteOne({ _id: result.doc._id });
       return res.status(400).json({ success: false, message: 'Registration data nahi mila. Dobara shuru karo.' });
@@ -320,6 +343,7 @@ router.post('/register/verify', otpVerifyLimiter, [emailRule, otpRule], async (r
       phone,
       password: passwordHash,
       role: role === 'worker' ? 'worker' : 'customer',
+      ...(role === 'worker' ? { service, city, experience } : {}),
     });
     await Otp.deleteOne({ _id: result.doc._id });
 

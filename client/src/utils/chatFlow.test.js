@@ -75,7 +75,7 @@ describe('booking conversation', () => {
   const run = (flow, text, value) => stepFlow(flow, { text, value }, { now: NOW });
 
   test('happy path ends in a submit payload with the right details', () => {
-    let { flow, messages } = startBooking('Plumber', { now: NOW, lastAddress: null });
+    let { flow, messages } = startBooking('Plumber', { now: NOW, addresses: [] });
     expect(flow.step).toBe('date');
     expect(messages[0].options.length).toBeGreaterThan(2);
 
@@ -104,11 +104,21 @@ describe('booking conversation', () => {
     expect(r.flow.step).toBe('submitting');
   });
 
-  test('the last used address is offered as a tile', () => {
-    let { flow } = startBooking('Cleaner', { now: NOW, lastAddress: '12 MG Road, Pune, India' });
+  test('every saved address is offered as a tile, and picking one is accepted', () => {
+    const addresses = [
+      { label: 'Home', full: '12 MG Road, Pune - 411001' },
+      { label: 'Work', full: '5 Tech Park, Near Gate 2, Pune - 411057' },
+    ];
+    let { flow } = startBooking('Cleaner', { now: NOW, addresses });
     let r = run(flow, 'kal');
     r = run(r.flow, '11am');
-    expect(r.messages[0].options.some((o) => o.value === '12 MG Road, Pune, India')).toBe(true);
+    const tiles = r.messages[0].options.filter((o) => o.value !== '__cancel');
+    expect(tiles.map((o) => o.value)).toEqual(addresses.map((a) => a.full));
+    expect(tiles[0].label).toContain('Home');
+
+    r = run(r.flow, tiles[1].label, tiles[1].value);
+    expect(r.flow.step).toBe('description');
+    expect(r.flow.data.address).toBe(addresses[1].full);
   });
 
   test('bad input is re-asked, not accepted', () => {

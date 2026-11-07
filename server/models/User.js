@@ -1,5 +1,15 @@
 const mongoose = require('mongoose');
 
+// Saved delivery addresses (a customer can keep up to 5)
+const addressSchema = new mongoose.Schema({
+  label: { type: String, enum: ['Home', 'Work', 'Other'], default: 'Home' },
+  line: { type: String, required: true },
+  landmark: { type: String, default: '' },
+  city: { type: String, required: true },
+  pincode: { type: String, required: true },
+  isDefault: { type: Boolean, default: false },
+});
+
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
@@ -10,6 +20,8 @@ const userSchema = new mongoose.Schema({
     enum: ['customer', 'worker', 'admin'],
     default: 'customer'
   },
+
+  addresses: { type: [addressSchema], default: [] },
 
   // ── Worker Fields ──────────────────────────────────────
   service: { type: String, default: '' },

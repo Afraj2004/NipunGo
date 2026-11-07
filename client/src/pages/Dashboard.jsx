@@ -252,7 +252,7 @@ useEffect(() => {
   const parsedUser = JSON.parse(savedUser);
 
   if (parsedUser.role === 'worker') {
-    navigate('/worker-dashboard');
+    navigate('/worker/dashboard');
     return;
   }
 

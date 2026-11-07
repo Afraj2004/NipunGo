@@ -25,7 +25,9 @@ beforeAll(() => {
 
 beforeEach(() => {
   localStorage.clear();
-  axios.get.mockResolvedValue({ data: { bookings: [{ address: '12 MG Road, Pune, India' }] } });
+  axios.get.mockResolvedValue({
+    data: { addresses: [{ _id: 'a1', label: 'Home', full: '12 MG Road, Pune, India', isDefault: true }] },
+  });
   axios.post.mockResolvedValue({ data: { success: true, reply: 'AI reply', suggestion: null } });
 });
 
@@ -99,7 +101,7 @@ test('the bot books on its own once the user agrees, no form needed', async () =
   // date -> time -> address (previous one offered) -> note -> confirm
   click(await screen.findByText(/^Kal \(/));
   click(await screen.findByText('10:00 AM'));
-  click(await screen.findByText(/📍 12 MG Road, Pune, India/));
+  click(await screen.findByText(/📍 Home: 12 MG Road, Pune, India/));
   click(await screen.findByRole('button', { name: /Skip/ }));
   expect(await screen.findByText(/Booking summary/)).toBeInTheDocument();
   click(screen.getByText(/Haan, confirm karo/));
@@ -129,7 +131,7 @@ test('a failed booking keeps the details and offers a retry', async () => {
   click(await screen.findByText(/Haan, Electrician book karo/));
   click(await screen.findByText(/^Kal \(/));
   click(await screen.findByText('02:00 PM'));
-  click(await screen.findByText(/📍 12 MG Road/));
+  click(await screen.findByText(/📍 Home: 12 MG Road/));
   click(await screen.findByRole('button', { name: /Skip/ }));
   click(await screen.findByText(/Haan, confirm karo/));
 

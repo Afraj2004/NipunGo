@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from '../utils/axios';
 import ForgotPasswordModal from '../components/ForgotPasswordModal';
+import { saveSession, homeFor, showCustomerSite, showWorkerSite } from '../utils/auth';
 
-function Login() {
+function Login({ portal = 'customer' }) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [formData, setFormData] = useState({
     emailOrPhone: '',  // 👈 Updated
@@ -17,12 +19,6 @@ function Login() {
 
   // ── Forgot Password States ────────────────────────────
   const [showForgotModal, setShowForgotModal] = useState(false);
-
-  // ── Auth Check ────────────────────────────────────────
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) navigate('/');
-  }, [navigate]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -42,22 +38,25 @@ function Login() {
       });
 
       if (response.data.success) {
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem(
-          'user',
-          JSON.stringify(response.data.user)
-        );
-        window.dispatchEvent(new Event('authchange'));
+        const { token, user } = response.data;
 
-        // Role ke hisaab se redirect
-        const { role } = response.data.user;
-        if (role === 'admin') {
-          navigate('/admin');
-        } else if (role === 'worker') {
-          navigate('/worker-dashboard');
-        } else {
-          navigate('/');
+        // Right door for the right person: no half-working pages
+        if (portal === 'worker' && user.role === 'customer') {
+          setError('Ye customer account hai. Customer login se login karo.');
+          return;
         }
+        if (portal === 'customer' && user.role === 'worker') {
+          setError('Ye worker account hai. Worker login se login karo.');
+          return;
+        }
+
+        saveSession({ token, user });
+        const from = location.state?.from;
+        const target =
+          from && from !== '/login' && from !== '/worker/login'
+            ? from
+            : user.role === 'customer' ? '/' : homeFor(user.role);
+        navigate(target, { replace: true });
       }
 
     } catch (err) {
@@ -165,10 +164,12 @@ function Login() {
             </Link>
 
             <h2 className="text-3xl font-bold text-gray-800 mb-2">
-              Welcome Back! 👋
+              {portal === 'worker' ? 'Worker Login 👷' : 'Welcome Back! 👋'}
             </h2>
             <p className="text-gray-500">
-              Apne account mein login karo
+              {portal === 'worker'
+                ? 'Jobs dekhne ke liye apne worker account mein login karo'
+                : 'Apne account mein login karo'}
             </p>
           </motion.div>
 
@@ -321,12 +322,30 @@ function Login() {
             <p className="text-center text-gray-500">
               Account nahi hai?{" "}
               <Link
-                to="/register"
+                to={portal === 'worker' ? '/worker/register' : '/register'}
                 className="text-primary font-bold hover:underline"
               >
                 Register Karo ✨
               </Link>
             </p>
+
+            {/* Other portal, for people who landed on the wrong login page */}
+            {portal === 'customer' && showWorkerSite && (
+              <p className="text-center text-gray-400 text-sm mt-3">
+                Worker ho?{" "}
+                <Link to="/worker/login" className="text-primary font-semibold hover:underline">
+                  Worker login →
+                </Link>
+              </p>
+            )}
+            {portal === 'worker' && showCustomerSite && (
+              <p className="text-center text-gray-400 text-sm mt-3">
+                Customer ho?{" "}
+                <Link to="/login" className="text-primary font-semibold hover:underline">
+                  Customer login →
+                </Link>
+              </p>
+            )}
 
           </motion.form>
         </div>

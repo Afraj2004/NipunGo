@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { showWorkerSite, showCustomerSite } from '../utils/auth';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
@@ -259,9 +260,14 @@ function Footer() {
               </span>
             </div>
 
-            <p className="text-gray-400 text-sm">
-              Made with ❤️ in India 🇮🇳
-            </p>
+            <div className="text-gray-400 text-sm text-center md:text-right">
+              <p>Made with ❤️ in India 🇮🇳</p>
+              {showWorkerSite && showCustomerSite && (
+                <Link to="/worker/login" className="text-gray-500 hover:text-white text-xs transition">
+                  👷 Worker ho? Yahan login / join karo
+                </Link>
+              )}
+            </div>
 
           </div>
         </div>

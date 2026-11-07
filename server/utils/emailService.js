@@ -562,7 +562,7 @@ const sendNewJobEmail = async ({
     </div>
 
     <a
-      href="${process.env.CLIENT_URL}/worker-dashboard"
+      href="${process.env.CLIENT_URL}/worker/dashboard"
       class="btn btn-block"
     >
       Dashboard Dekho →

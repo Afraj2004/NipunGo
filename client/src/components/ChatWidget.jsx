@@ -167,14 +167,15 @@ function ChatWidget() {
       return;
     }
     setIsLoading(true);
-    let lastAddress = null;
+    let addresses = [];
     try {
-      const res = await axios.get(`/booking/my-bookings/${userId}`);
-      lastAddress = res.data.bookings?.find((b) => b.address)?.address || null;
+      const res = await axios.get('/user/addresses');
+      // default address first
+      addresses = [...(res.data.addresses || [])].sort((x, y) => Number(y.isDefault) - Number(x.isDefault));
     } catch {
       // not essential - the user can just type the address
     }
-    const started = startBooking(service, { lastAddress });
+    const started = startBooking(service, { addresses });
     setFlow(started.flow);
     addMessages(started.messages.map(flowTag));
     setIsLoading(false);

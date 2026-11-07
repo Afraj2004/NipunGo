@@ -123,6 +123,7 @@ app.use((req, res, next) => {
 // ════════════════════════════════════════════════
 
 app.use('/api/auth',    require('./routes/auth'));
+app.use('/api/user',    require('./routes/user'));
 app.use('/api/booking', require('./routes/booking'));
 app.use('/api/worker',  require('./routes/worker'));
 app.use('/api/admin',   require('./routes/admin'));
@@ -151,6 +152,7 @@ app.get('/', (req, res) => {
     secured:  true,
     cors:     'Active ✅',
     ai:       process.env.GEMINI_API_KEY ? 'configured' : 'missing GEMINI_API_KEY',
+    email:    mailer.getProvider(),
   });
 });
 

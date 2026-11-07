@@ -422,9 +422,25 @@ function Booking() {
     // Worker ko booking page nahi dikhna chahiye
     const parsedUser = JSON.parse(user);
     if (parsedUser.role === 'worker') {
-      navigate('/worker-dashboard');
+      navigate('/worker/dashboard');
     }
   }, [navigate]);
+
+  // Saved addresses (managed on the Profile page)
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  useEffect(() => {
+    axios.get('/user/addresses')
+      .then((res) => {
+        const list = res.data.addresses || [];
+        setSavedAddresses(list);
+        // Pre-fill the default address once, unless the user already typed something
+        const preferred = list.find((a) => a.isDefault) || list[0];
+        if (preferred) {
+          setFormData((f) => (f.address ? f : { ...f, address: preferred.full }));
+        }
+      })
+      .catch(() => { /* optional feature: typing an address still works */ });
+  }, []);
 
   // null = still checking, number = available workers for this service
   const [workersAvailable, setWorkersAvailable] = useState(null);
@@ -794,6 +810,33 @@ function Booking() {
                 <label className="block text-gray-700 font-medium mb-2">
                   Ghar Ka Address
                 </label>
+
+                {savedAddresses.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-sm text-gray-500 mb-2">Saved addresses:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {savedAddresses.map((a) => (
+                        <button
+                          key={a._id}
+                          type="button"
+                          onClick={() => { setFormData({ ...formData, address: a.full }); setError(''); }}
+                          className={`px-3 py-2 rounded-xl border-2 text-sm font-medium transition ${
+                            formData.address === a.full
+                              ? 'border-primary bg-indigo-50 text-primary'
+                              : 'border-gray-200 text-gray-600 hover:border-indigo-200'
+                          }`}
+                        >
+                          {a.label === 'Home' ? '🏠' : a.label === 'Work' ? '🏢' : '📍'} {a.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Naya address chahiye? Neeche likho, ya{' '}
+                      <a href="/profile" className="text-primary underline">Profile mein save karo</a>.
+                    </p>
+                  </div>
+                )}
+
                 <div className="relative">
                   <span className="absolute left-4 top-4 text-gray-400">
                     📍

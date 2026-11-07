@@ -2,7 +2,7 @@
 // notes -> confirm. Pure functions only (no React, no network), so the whole
 // flow is unit-testable. ChatWidget does the API calls.
 //
-// flow shape: { service, step, data: { date, time, address, description }, lastAddress }
+// flow shape: { service, step, data: { date, time, address, description }, addresses }
 // step: 'date' | 'time' | 'address' | 'description' | 'confirm' | 'submitting'
 
 import { PLATFORM_FEE, SERVICE_ICONS, SERVICE_PRICES, MENU_OPTION } from '../data/chatKnowledge';
@@ -146,9 +146,10 @@ const askDate = (flow, now, intro) => ({
   messages: [bot(intro || 'Kis din aana chahiye? Tile chuno ya date likho (jaise 12/11/2026).', dateOptions(now))],
 });
 
-// Start the conversation for `service`
-export const startBooking = (service, { now = new Date(), lastAddress = null } = {}) => {
-  const flow = { service, step: 'date', data: {}, lastAddress };
+// Start the conversation for `service`.
+// addresses: the customer's saved addresses ([{ label, full, isDefault }]), default first
+export const startBooking = (service, { now = new Date(), addresses = [] } = {}) => {
+  const flow = { service, step: 'date', data: {}, addresses };
   const res = askDate(
     flow,
     now,
@@ -202,15 +203,17 @@ export const stepFlow = (flow, input, { now = new Date() } = {}) => {
         return { flow, messages: [bot('Is time pe slot available nahi hai. Tile se chuno:', timeOptions(flow.data.date, now))] };
       }
       const next = { ...flow, step: 'address', data: { ...flow.data, time: slot } };
-      const options = [];
-      if (flow.lastAddress) options.push(opt(`📍 ${flow.lastAddress}`, flow.lastAddress));
+      const saved = (flow.addresses || []).slice(0, 5);
+      const options = saved.map((a) => opt(`📍 ${a.label}: ${a.full}`, a.full));
       options.push(opt('❌ Cancel', '__cancel'));
       return {
         flow: next,
         messages: [
           bot(
-            `⏰ ${slot}. Ab poora address likho (ghar number, area, city).` +
-              (flow.lastAddress ? '\nYa pichla address chuno:' : ''),
+            `⏰ ${slot}. Ab address batao.` +
+              (saved.length
+                ? '\nSaved address chuno ya naya poora address likho (ghar number, area, city):'
+                : ' Poora address likho (ghar number, area, city).'),
             options
           ),
         ],

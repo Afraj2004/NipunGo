@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { clearAllChats } from '../utils/chatStorage';
+import { getUser, clearSession, showCustomerSite } from '../utils/auth';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -19,40 +20,50 @@ function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // User check karo
+  // Keep in sync with login/logout (this tab and others)
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    const refresh = () => setUser(getUser());
+    refresh();
+    window.addEventListener('authchange', refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener('authchange', refresh);
+      window.removeEventListener('storage', refresh);
+    };
   }, [location]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
     clearAllChats(); // don't leave the AI chat behind for the next person
-    window.dispatchEvent(new Event('authchange'));
+    clearSession();
     setUser(null);
-    navigate('/');
+    navigate(showCustomerSite ? '/' : '/worker/login');
     setIsOpen(false);
   };
 
   // Active link check
   const isActive = (path) => location.pathname === path;
 
-  const users = JSON.parse(localStorage.getItem('user'));
+  const role = user?.role;
+  const loginPath = showCustomerSite ? '/login' : '/worker/login';
+  const registerPath = showCustomerSite ? '/register' : '/worker/register';
 
-const navLinks = [
-  { path: '/', label: 'Home', icon: '🏠' },
-  { path: '/services', label: 'Services', icon: '🔧' },
-  {
-    path: users?.role === 'worker'
-      ? '/worker-dashboard'
-      : '/dashboard',
-    label: 'Dashboard',
-    icon: '📋'
-  },
-];
+  // Each kind of account only sees links that work for it
+  const navLinks =
+    role === 'worker'
+      ? [
+          { path: '/worker/dashboard', label: 'Dashboard', icon: '📋' },
+          { path: '/profile', label: 'Profile', icon: '👤' },
+        ]
+      : role === 'admin'
+        ? [{ path: '/', label: 'Home', icon: '🏠' }]
+        : showCustomerSite
+          ? [
+              { path: '/', label: 'Home', icon: '🏠' },
+              { path: '/services', label: 'Services', icon: '🔧' },
+              { path: '/dashboard', label: 'Dashboard', icon: '📋' },
+              ...(role === 'customer' ? [{ path: '/profile', label: 'Profile', icon: '👤' }] : []),
+            ]
+          : [];
 
   return (
     <motion.nav
@@ -108,7 +119,9 @@ const navLinks = [
                 {/* User Badge */}
                 <motion.div
                   whileHover={{ scale: 1.02 }}
-                  className="flex items-center gap-2 bg-indigo-50 px-4 py-2 rounded-xl"
+                  onClick={() => navigate('/profile')}
+                  title="My profile"
+                  className="flex items-center gap-2 bg-indigo-50 px-4 py-2 rounded-xl cursor-pointer"
                 >
                   <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm">
                     {user.name.charAt(0).toUpperCase()}
@@ -119,7 +132,7 @@ const navLinks = [
                 </motion.div>
 
                 {/* Admin Link */}
-                {user.email === 'admin@nipungo.com' && (
+                {user.role === 'admin' && (
                   <Link to="/admin">
                     <motion.div
                       whileHover={{ y: -2 }}
@@ -142,7 +155,7 @@ const navLinks = [
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <Link to="/login">
+                <Link to={loginPath}>
                   <motion.div
                     whileHover={{ y: -2 }}
                     className="px-4 py-2 text-gray-600 font-medium hover:text-primary transition"
@@ -150,7 +163,7 @@ const navLinks = [
                     Login
                   </motion.div>
                 </Link>
-                <Link to="/register">
+                <Link to={registerPath}>
                   <motion.div
                     whileHover={{ y: -2, scale: 1.02 }}
                     whileTap={{ scale: 0.95 }}
@@ -245,7 +258,7 @@ const navLinks = [
                   </div>
 
                   {/* Admin Link */}
-                  {user.email === 'admin@nipungo.com' && (
+                  {user.role === 'admin' && (
                     <Link
                       to="/admin"
                       onClick={() => setIsOpen(false)}
@@ -266,14 +279,14 @@ const navLinks = [
               ) : (
                 <>
                   <Link
-                    to="/login"
+                    to={loginPath}
                     onClick={() => setIsOpen(false)}
                     className="flex items-center justify-center gap-2 px-4 py-3 border border-primary text-primary rounded-xl font-medium"
                   >
                     Login
                   </Link>
                   <Link
-                    to="/register"
+                    to={registerPath}
                     onClick={() => setIsOpen(false)}
                     className="flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white rounded-xl font-bold shadow-md"
                   >
