@@ -4,7 +4,48 @@ const express  = require('express');
 const router   = express.Router();
 const User     = require('../models/User');
 const { cloudinary, upload } = require('../config/cloudinary');
+const jwt = require('jsonwebtoken');
+const Booking = require('../models/Booking');
 const { protect } = require('../middleware/auth');
+
+// Public endpoints still want to know who is asking (if anyone) so that
+// contact details are only shown to people who are allowed to see them.
+const optionalAuth = async (req, res, next) => {
+  req.user = null;
+  try {
+    const header = req.headers.authorization || '';
+    if (header.startsWith('Bearer ')) {
+      const decoded = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET);
+      req.user = await User.findById(decoded.id).select('-password');
+    }
+  } catch {
+    // invalid/expired token -> treated as anonymous
+  }
+  next();
+};
+
+// Remove phone/email unless the viewer is the worker, an admin, or a customer
+// who has a confirmed/completed booking with this worker.
+const withContactRules = async (workerDoc, viewer) => {
+  const worker = workerDoc.toObject ? workerDoc.toObject() : { ...workerDoc };
+  let canSee = false;
+  if (viewer) {
+    if (viewer.role === 'admin' || String(viewer._id) === String(worker._id)) {
+      canSee = true;
+    } else {
+      canSee = !!(await Booking.exists({
+        customer: viewer._id,
+        assignedWorker: worker._id,
+        status: { $in: ['Confirmed', 'Completed'] },
+      }));
+    }
+  }
+  if (!canSee) {
+    delete worker.phone;
+    delete worker.email;
+  }
+  return worker;
+};
 
 // Sirf khud worker (ya admin) apni profile badal sakta hai
 const selfOrAdmin = (req, res, next) => {
@@ -38,14 +79,15 @@ router.get('/availability', async (req, res) => {
 });
 
 // ── 1. SABHI WORKERS ─────────────────────────────────────
-router.get('/all', async (req, res) => {
+router.get('/all', optionalAuth, async (req, res) => {
   try {
     const filter = { role: 'worker' };
     if (req.query.service)          filter.service     = req.query.service;
     if (req.query.city)             filter.city        = req.query.city;
     if (req.query.available === 'true') filter.isAvailable = true;
 
-    const workers = await User.find(filter).select('-password');
+    const found = await User.find(filter).select('-password');
+    const workers = await Promise.all(found.map((w) => withContactRules(w, req.user)));
     res.json({ success: true, workers, count: workers.length });
 
   } catch (error) {
@@ -59,14 +101,15 @@ router.get('/all', async (req, res) => {
 });
 
 // ── 2. SERVICE KE HISAAB SE WORKERS ──────────────────────
-router.get('/service/:serviceName', async (req, res) => {
+router.get('/service/:serviceName', optionalAuth, async (req, res) => {
   try {
-    const workers = await User.find({
+    const found = await User.find({
       role:        'worker',
       service:     req.params.serviceName,
       isAvailable: true,
     }).select('-password');
 
+    const workers = await Promise.all(found.map((w) => withContactRules(w, req.user)));
     res.json({ success: true, workers, count: workers.length });
 
   } catch (error) {
@@ -345,7 +388,7 @@ router.delete('/delete-photo/:workerId', protect, selfOrAdmin, async (req, res) 
 // ── 7. SINGLE WORKER PROFILE ──────────────────────────────
 // ⚠️ SABSE LAST RAKHO — ye /:workerId generic hai,
 //    upar ke specific routes ko match kar sakta hai
-router.get('/:workerId', async (req, res) => {
+router.get('/:workerId', optionalAuth, async (req, res) => {
   try {
     const worker = await User.findById(
       req.params.workerId
@@ -358,7 +401,7 @@ router.get('/:workerId', async (req, res) => {
       });
     }
 
-    res.json({ success: true, worker });
+    res.json({ success: true, worker: await withContactRules(worker, req.user) });
 
   } catch (error) {
     console.error('GET /:workerId error:', error.message);

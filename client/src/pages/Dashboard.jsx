@@ -212,60 +212,6 @@ const fetchMyBookings = useCallback(async (userId, token) => {
     setLoading(false);
   }
 }, []); // ← empty array — function kabhi change nahi hoga
-const [isChatOpen, setIsChatOpen] = useState(false);
-const [chatInput, setChatInput] = useState('');
-const [messages, setMessages] = useState([{ role: 'bot', text: 'Namaste! Main Nipun AI hoon. Aapki ghar ki kya samasya hai?' }]);
-const [aiSuggestion, setAiSuggestion] = useState(null); // To store { service: 'Plumber', price: 499 }
-const [isAiLoading, setIsAiLoading] = useState(false);
-const chatEndRef = useRef(null);
-
-useEffect(() => {
-  chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-}, [messages, isAiLoading, isChatOpen]);
-
-const handleSendMessage = async () => {
-  if (!chatInput.trim()) return;
-
-  // const userMessage = { role: "user", parts: [{ text: chatInput }] };
-  setMessages(prev => [...prev, { role: 'user', text: chatInput }]); // For UI display
-  setIsAiLoading(true);
-  setChatInput('');
-
-  try {
-    const token = localStorage.getItem('token');
-    const res = await axios.post('/chat/message', {
-      message: chatInput,
-      // Gemini history must start with a user turn, so skip the bot greeting
-      history: messages.slice(1).map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.text }]
-      }))
-    }, { headers: { Authorization: `Bearer ${token}` } });
-
-    const reply = res.data.reply;
-    
-    // UI Update
-    setMessages(prev => [...prev, { role: 'bot', text: reply }]);
-
-    // Server validates the suggestion (real service + real price)
-    if (res.data.suggestion) {
-      setAiSuggestion(res.data.suggestion);
-    }
-  } catch (err) {
-    console.error("AI Chat Error:", err);
-    const expired = err.response?.status === 401;
-    setMessages(prev => [...prev, {
-      role: 'bot',
-      text: expired
-        ? 'Aapka session expire ho gaya hai. Please dobara login karo.'
-        : 'Nipun AI abhi available nahi hai. Thodi der baad dobara try karo. 🙏'
-    }]);
-  } finally {
-    setIsAiLoading(false);
-  }
-};
-
-
 // ── Poll Only Searching Bookings ──────────────────────
 const pollSearchingBookings = useCallback(async (userId, token) => {
   try {
@@ -616,76 +562,7 @@ useEffect(() => {
         </motion.div>
 
 
-<div className="fixed bottom-6 right-6 z-50">
-  <AnimatePresence>
-    {isChatOpen && (
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.8, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.8, y: 20 }}
-        className="bg-white w-[24rem] sm:w-[30rem] lg:w-[36rem] max-w-[calc(100vw-2rem)] h-[34rem] lg:h-[42rem] max-h-[85vh] rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden border border-gray-200"
-      >
-        <div className="bg-primary p-5 text-white font-bold text-lg flex justify-between items-center">
-          <span>Nipun AI Expert 🤖</span>
-          <button onClick={() => setIsChatOpen(false)} className="text-xl px-2" aria-label="Close chat">✕</button>
-        </div>
-        {/* Inside the messages mapping area */}
-<div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
-  {messages.map((m, i) => (
-    <div key={i} className={`px-4 py-3 rounded-2xl max-w-[88%] shadow-sm ${
-      m.role === 'user' ? 'bg-primary text-white self-end' : 'bg-gray-100 self-start text-gray-800'
-    }`}>
-      <p className="text-base lg:text-lg leading-relaxed whitespace-pre-wrap">{m.text.split(/```|\{/)[0].trim()}</p> {/* Hide the raw JSON from user */}
-    </div>
-  ))}
-  
-  {/* The "Smart" Suggestion Button */}
-  {aiSuggestion && (
-    <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-green-50 border border-green-200 p-3 rounded-xl mt-2"
-    >
-      <p className="text-sm text-green-700 font-bold mb-2">✨ Nipun AI Recommendation:</p>
-      <button 
-        onClick={() => {
-          setAiSuggestion(null);
-          navigate(`/booking/${encodeURIComponent(aiSuggestion.service)}`);
-        }}
-        className="w-full bg-green-500 text-white py-3 rounded-lg text-sm font-bold shadow-md hover:bg-green-600 transition"
-      >
-        Book {aiSuggestion.service} now (₹{aiSuggestion.price})
-      </button>
-    </motion.div>
-  )}
-
-  {isAiLoading && <div className="text-sm text-gray-400 animate-pulse">Nipun AI is thinking...</div>}
-  <div ref={chatEndRef} />
-</div>
-        <div className="p-4 border-t flex gap-3">
-          <input 
-            value={chatInput} 
-            onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !isAiLoading) handleSendMessage(); }}
-            className="flex-1 border rounded-xl px-4 py-3 text-base outline-none focus:border-primary" 
-            placeholder="Describe your problem..."
-          />
-          <button onClick={handleSendMessage} disabled={isAiLoading} className="bg-primary text-white px-5 py-3 rounded-xl font-semibold disabled:opacity-60">Send</button>
-        </div>
-      </motion.div>
-    )}
-  </AnimatePresence>
-  <button 
-    onClick={() => setIsChatOpen(!isChatOpen)}
-    className="bg-secondary w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-3xl hover:scale-110 transition"
-  >
-    💬
-  </button>
-</div>
-
-
-
-        {/* Bookings Card */}
+{/* Bookings Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

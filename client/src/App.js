@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import ChatWidget from './components/ChatWidget';
 import Home from './pages/Home';
 import Services from './pages/Services';
 import Login from './pages/Login';
@@ -32,6 +33,7 @@ function App() {
         </Routes>
       </div>
       <Footer />
+      <ChatWidget />
       <SpeedInsights />
     </BrowserRouter>
   );

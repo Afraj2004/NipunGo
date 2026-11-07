@@ -18,15 +18,40 @@ const extractSuggestion = (reply) => {
   }
 };
 
+const MAX_MESSAGE_CHARS = 1000;
+const MAX_HISTORY_TURNS = 20;
+const MAX_TURN_CHARS = 2000;
+
+// Never trust client-sent history: keep only well-formed user/model text turns
+const sanitizeHistory = (history) => {
+  if (!Array.isArray(history)) return [];
+  const clean = [];
+  for (const turn of history.slice(-MAX_HISTORY_TURNS)) {
+    const text = turn?.parts?.[0]?.text;
+    if ((turn?.role !== 'user' && turn?.role !== 'model') || typeof text !== 'string' || !text.trim()) {
+      continue;
+    }
+    const last = clean[clean.length - 1];
+    if (last && last.role === turn.role) continue; // keep strict alternation
+    clean.push({ role: turn.role, parts: [{ text: text.slice(0, MAX_TURN_CHARS) }] });
+  }
+  while (clean.length && clean[0].role !== 'user') clean.shift();
+  if (clean.length && clean[clean.length - 1].role === 'user') clean.pop();
+  return clean;
+};
+
 router.post('/message', protect, async (req, res) => {
   const { message, history } = req.body; // history: [{role: "user"|"model", parts: [{text}]}]
 
   if (typeof message !== 'string' || !message.trim()) {
     return res.status(400).json({ success: false, message: 'Message required hai!' });
   }
+  if (message.length > MAX_MESSAGE_CHARS) {
+    return res.status(400).json({ success: false, message: 'Message bahut lamba hai!' });
+  }
 
   try {
-    const reply = await sendChatMessage(message, Array.isArray(history) ? history : []);
+    const reply = await sendChatMessage(message, sanitizeHistory(history));
     const suggestion = extractSuggestion(reply);
 
     res.json({

@@ -1,7 +1,15 @@
 const { GoogleGenAI } = require('@google/genai');
 const { SERVICE_PRICES } = require('./services');
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+// Tried in order; a model that is overloaded, slow or retired falls through to the next.
+// GEMINI_MODEL (env) overrides the first choice.
+const MODELS = [
+  process.env.GEMINI_MODEL,
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+].filter(Boolean);
+const ATTEMPT_TIMEOUT_MS = 15000;
 
 const SERVICES = Object.keys(SERVICE_PRICES).join(', ');
 
@@ -20,35 +28,36 @@ const getClient = () => {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not set');
   }
-  if (!client) client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  if (!client) {
+    client = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      // Fail a stuck attempt quickly so retries (or the error message) arrive in time
+      httpOptions: { timeout: ATTEMPT_TIMEOUT_MS },
+    });
+  }
   return client;
-};
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// Gemini sometimes answers 429/503 under load — those are worth retrying
-const isRetryable = (err) => {
-  const code = err.status || err.code;
-  return code === 429 || code === 500 || code === 503 || /UNAVAILABLE|high demand|fetch failed|ECONNRESET|ETIMEDOUT/i.test(err.message);
 };
 
 // history: [{ role: 'user' | 'model', parts: [{ text }] }]
 const sendChatMessage = async (message, history = []) => {
-  const MAX_ATTEMPTS = 4;
-  for (let attempt = 1; ; attempt++) {
+  const ai = getClient(); // throws if GEMINI_API_KEY is missing
+  let lastError;
+
+  for (const model of [...new Set(MODELS)]) {
     try {
-      const chat = getClient().chats.create({
-        model: MODEL,
+      const chat = ai.chats.create({
+        model,
         config: { systemInstruction: SYSTEM_INSTRUCTION },
         history,
       });
       const response = await chat.sendMessage({ message });
       return response.text;
     } catch (err) {
-      if (attempt >= MAX_ATTEMPTS || !isRetryable(err)) throw err;
-      await sleep(1000 * 2 ** (attempt - 1)); // 1s, 2s, 4s
+      lastError = err;
+      console.warn(`Gemini ${model} failed: ${String(err.message).slice(0, 120)}`);
     }
   }
+  throw lastError;
 };
 
 module.exports = { sendChatMessage };

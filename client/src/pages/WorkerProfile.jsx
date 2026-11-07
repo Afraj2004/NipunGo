@@ -251,11 +251,11 @@ function WorkerProfile() {
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-3">
                   <span className="text-gray-400">📱</span>
-                  <span className="text-gray-700">{worker.phone}</span>
+                  <span className="text-gray-700">{worker.phone || 'Booking confirm hone ke baad dikhega'}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-gray-400">📧</span>
-                  <span className="text-gray-700">{worker.email}</span>
+                  <span className="text-gray-700">{worker.email || 'Booking confirm hone ke baad dikhega'}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-gray-400">📍</span>

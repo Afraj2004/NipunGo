@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { clearAllChats } from '../utils/chatStorage';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -29,6 +30,8 @@ function Navbar() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    clearAllChats(); // don't leave the AI chat behind for the next person
+    window.dispatchEvent(new Event('authchange'));
     setUser(null);
     navigate('/');
     setIsOpen(false);
