@@ -164,7 +164,7 @@ function Login() {
           transition={{ delay: 1 }}
           className="absolute bottom-8 text-indigo-300 text-sm"
         >
-          © 2024 NipunGo - Made with ❤️ in India
+          © {new Date().getFullYear()} NipunGo - Made with ❤️ in India
         </motion.p>
       </motion.div>
 

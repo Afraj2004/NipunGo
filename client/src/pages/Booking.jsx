@@ -426,6 +426,20 @@ function Booking() {
     }
   }, [navigate]);
 
+  // null = still checking, number = available workers for this service
+  const [workersAvailable, setWorkersAvailable] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    axios.get('/worker/availability')
+      .then((res) => {
+        if (!cancelled) {
+          setWorkersAvailable(res.data.availability?.[serviceName] || 0);
+        }
+      })
+      .catch(() => { if (!cancelled) setWorkersAvailable(null); });
+    return () => { cancelled = true; };
+  }, [serviceName]);
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setError('');
@@ -703,6 +717,14 @@ function Booking() {
                 flex items-center gap-2">
                 📅 Schedule Karo
               </h2>
+
+              {workersAvailable === 0 && (
+                <div className="mb-6 p-4 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm">
+                  😔 Abhi <strong>{serviceName}</strong> ka koi worker available nahi hai.
+                  Aap booking try kar sakte ho, par worker milne ki guarantee nahi hai —
+                  thodi der baad dobara aana ya koi aur service dekho.
+                </div>
+              )}
 
               <div className="mb-6">
                 <label className="block text-gray-700 font-medium mb-2">

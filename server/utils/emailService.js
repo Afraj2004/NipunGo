@@ -10,13 +10,17 @@ const transporter = nodemailer.createTransport({
 });
 
 // ── Verify Connection ────────────────────────────────────
-transporter.verify((error) => {
-  if (error) {
-    console.log('❌ Email service error:', error.message);
-  } else {
-    console.log('✅ Email service ready!');
-  }
-});
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  transporter.verify((error) => {
+    if (error) {
+      console.log('❌ Email service error:', error.message);
+    } else {
+      console.log('✅ Email service ready!');
+    }
+  });
+} else {
+  console.warn('⚠️  Email not configured (EMAIL_USER / EMAIL_PASS missing) — emails disabled');
+}
 
 // ════════════════════════════════════════════════════════
 // 📌 EMAIL TEMPLATES

@@ -247,19 +247,9 @@ const handleSendMessage = async () => {
     // UI Update
     setMessages(prev => [...prev, { role: 'bot', text: reply }]);
 
-    // Logic to catch the JSON suggestion from Gemini
-    if (reply.includes('{')) {
-      const jsonMatch = reply.match(/\{.*\}/s);
-      if (jsonMatch) {
-        try {
-          const data = JSON.parse(jsonMatch[0]);
-          if (data.action === "BOOKING_SUGGESTION") {
-            setAiSuggestion(data);
-          }
-        } catch (parseErr) {
-          // Reply had braces but no valid JSON — just show the text
-        }
-      }
+    // Server validates the suggestion (real service + real price)
+    if (res.data.suggestion) {
+      setAiSuggestion(res.data.suggestion);
     }
   } catch (err) {
     console.error("AI Chat Error:", err);
@@ -563,12 +553,12 @@ useEffect(() => {
       <motion.div
         key={idx}
         whileHover={{ scale: 1.05 }}
-        onClick={() => navigate('/booking', { state: { service: item } })}
-        className="flex-shrink-0 bg-white/20 backdrop-blur-md p-4 rounded-2xl 
-                   border border-white/30 min-w-[140px] cursor-pointer text-center"
+        onClick={() => navigate(`/booking/${encodeURIComponent(item)}`)}
+        className="flex-shrink-0 bg-white p-4 rounded-2xl shadow-md
+                   min-w-[140px] cursor-pointer text-center"
       >
         <span className="text-3xl block mb-2">{getServiceIcon(item)}</span>
-        <span className="text-white font-medium text-sm">{item}</span>
+        <span className="text-gray-800 font-semibold text-sm">{item}</span>
       </motion.div>
     ))}
   </div>
@@ -633,7 +623,7 @@ useEffect(() => {
         initial={{ opacity: 0, scale: 0.8, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.8, y: 20 }}
-        className="bg-white w-[26rem] max-w-[calc(100vw-2rem)] h-[34rem] max-h-[75vh] rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden border border-gray-200"
+        className="bg-white w-[24rem] sm:w-[30rem] lg:w-[36rem] max-w-[calc(100vw-2rem)] h-[34rem] lg:h-[42rem] max-h-[85vh] rounded-2xl shadow-2xl flex flex-col mb-4 overflow-hidden border border-gray-200"
       >
         <div className="bg-primary p-5 text-white font-bold text-lg flex justify-between items-center">
           <span>Nipun AI Expert 🤖</span>
@@ -645,7 +635,7 @@ useEffect(() => {
     <div key={i} className={`px-4 py-3 rounded-2xl max-w-[88%] shadow-sm ${
       m.role === 'user' ? 'bg-primary text-white self-end' : 'bg-gray-100 self-start text-gray-800'
     }`}>
-      <p className="text-base leading-relaxed whitespace-pre-wrap">{m.text.split(/```|\{/)[0].trim()}</p> {/* Hide the raw JSON from user */}
+      <p className="text-base lg:text-lg leading-relaxed whitespace-pre-wrap">{m.text.split(/```|\{/)[0].trim()}</p> {/* Hide the raw JSON from user */}
     </div>
   ))}
   
@@ -660,7 +650,7 @@ useEffect(() => {
       <button 
         onClick={() => {
           setAiSuggestion(null);
-          navigate('/booking', { state: { service: aiSuggestion.service, price: aiSuggestion.price } });
+          navigate(`/booking/${encodeURIComponent(aiSuggestion.service)}`);
         }}
         className="w-full bg-green-500 text-white py-3 rounded-lg text-sm font-bold shadow-md hover:bg-green-600 transition"
       >

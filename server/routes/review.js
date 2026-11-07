@@ -2,18 +2,38 @@ const express = require('express');
 const router = express.Router();
 const Review = require('../models/Review');
 const User = require('../models/User');
+const Booking = require('../models/Booking');
+const { protect } = require('../middleware/auth');
+
+router.use(protect);
 
 // Review add karo
 router.post('/add', async (req, res) => {
   try {
-    const {
-      booking,
-      customer,
-      worker,
-      rating,
-      comment,
-      service
-    } = req.body;
+    const { booking, rating, comment } = req.body;
+
+    const bookingDoc = booking && await Booking.findById(booking);
+    if (!bookingDoc) {
+      return res.status(404).json({ message: 'Booking nahi mili!' });
+    }
+    // Sirf booking ka customer, completed booking pe review de sakta hai
+    if (String(bookingDoc.customer) !== String(req.user.id)) {
+      return res.status(403).json({ message: 'Yeh aapki booking nahi hai!' });
+    }
+    if (bookingDoc.status !== 'Completed' || !bookingDoc.assignedWorker) {
+      return res.status(400).json({
+        message: 'Review sirf completed booking pe de sakte ho!'
+      });
+    }
+    const numRating = Number(rating);
+    if (!(numRating >= 1 && numRating <= 5)) {
+      return res.status(400).json({ message: 'Rating 1 se 5 ke beech honi chahiye!' });
+    }
+
+    // Identity booking se aati hai, request body se nahi
+    const customer = req.user.id;
+    const worker = bookingDoc.assignedWorker;
+    const service = bookingDoc.service;
 
     // Check karo pehle se review hai ya nahi
     const existingReview = await Review.findOne({
@@ -31,7 +51,7 @@ router.post('/add', async (req, res) => {
       booking,
       customer,
       worker,
-      rating,
+      rating: numRating,
       comment,
       service
     });

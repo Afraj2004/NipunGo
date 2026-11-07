@@ -9,16 +9,38 @@ const {
   sendBookingCompletedEmail,
   sendBookingCancelledEmail
 } = require('../utils/emailService'); // 👈 NEW
+const { protect, adminOnly } = require('../middleware/auth');
+const { getBookingTotal } = require('../config/services');
+
+// Har booking route pe login zaroori hai
+router.use(protect);
+
+const isAdmin = (req) => req.user.role === 'admin';
+const sameId = (a, b) => String(a?._id || a) === String(b?._id || b);
+const forbid = (res) => res.status(403).json({
+  success: false,
+  message: 'Aapko is action ki permission nahi hai!'
+});
 
 // ════════════════════════════════════════════════
 // 📌 1. BOOKING BANAO
 // ════════════════════════════════════════════════
 router.post('/create', async (req, res) => {
   try {
+    const customerId = req.user.id;
     const {
-      customerId, service, date,
-      time, address, description, price
+      service, date,
+      time, address, description
     } = req.body;
+
+    // Price server decide karta hai — client pe bharosa nahi
+    const price = getBookingTotal(service);
+    if (price === null) {
+      return res.status(400).json({
+        success: false,
+        message: 'Yeh service available nahi hai!'
+      });
+    }
 
     if (!customerId || !service || !date ||
         !time || !address || !price) {
@@ -35,18 +57,12 @@ router.post('/create', async (req, res) => {
     }).select('_id name');
 
     if (availableWorkers.length === 0) {
-      const booking = await Booking.create({
-        customer: customerId,
-        service, date, time, address,
-        description: description || '',
-        price, status: 'No Workers',
-        pendingWorkers: []
-      });
-
+      // Koi record nahi banate — customer ki history saaf rahe
       return res.status(200).json({
         success: false,
-        message: 'Abhi koi worker available nahi hai!',
-        booking
+        noWorkers: true,
+        message: `Abhi ${service} ka koi worker available nahi hai. ` +
+          'Thodi der baad try karo ya koi aur service dekho.'
       });
     }
 
@@ -99,6 +115,9 @@ router.post('/create', async (req, res) => {
 // ════════════════════════════════════════════════
 router.get('/worker-requests/:workerId', async (req, res) => {
   try {
+    if (!sameId(req.params.workerId, req.user.id) && !isAdmin(req)) {
+      return forbid(res);
+    }
     const requests = await Booking.find({
       pendingWorkers: req.params.workerId,
       status: 'Searching'
@@ -121,8 +140,9 @@ router.get('/worker-requests/:workerId', async (req, res) => {
 // ════════════════════════════════════════════════
 router.put('/accept/:bookingId', async (req, res) => {
   try {
+    if (req.user.role !== 'worker') return forbid(res);
     const { bookingId } = req.params;
-    const { workerId } = req.body;
+    const workerId = req.user.id;
 
     if (!workerId) {
       return res.status(400).json({
@@ -234,8 +254,9 @@ router.put('/accept/:bookingId', async (req, res) => {
 // ════════════════════════════════════════════════
 router.put('/reject/:bookingId', async (req, res) => {
   try {
+    if (req.user.role !== 'worker') return forbid(res);
     const { bookingId } = req.params;
-    const { workerId } = req.body;
+    const workerId = req.user.id;
 
     if (!workerId) {
       return res.status(400).json({
@@ -293,6 +314,9 @@ router.put('/reject/:bookingId', async (req, res) => {
 // ════════════════════════════════════════════════
 router.get('/my-bookings/:customerId', async (req, res) => {
   try {
+    if (!sameId(req.params.customerId, req.user.id) && !isAdmin(req)) {
+      return forbid(res);
+    }
     const bookings = await Booking.find({
       customer: req.params.customerId
     })
@@ -318,6 +342,9 @@ router.get('/my-bookings/:customerId', async (req, res) => {
 // ════════════════════════════════════════════════
 router.get('/worker-bookings/:workerId', async (req, res) => {
   try {
+    if (!sameId(req.params.workerId, req.user.id) && !isAdmin(req)) {
+      return forbid(res);
+    }
     const bookings = await Booking.find({
       assignedWorker: req.params.workerId,
       status: { $in: ['Confirmed', 'Completed', 'Cancelled'] }
@@ -355,6 +382,12 @@ router.get('/single/:bookingId', async (req, res) => {
       });
     }
 
+    const involved =
+      sameId(booking.customer, req.user.id) ||
+      sameId(booking.assignedWorker, req.user.id) ||
+      (booking.pendingWorkers || []).some(w => sameId(w, req.user.id));
+    if (!involved && !isAdmin(req)) return forbid(res);
+
     res.json({ success: true, booking });
 
   } catch (error) {
@@ -371,6 +404,25 @@ router.get('/single/:bookingId', async (req, res) => {
 // ════════════════════════════════════════════════
 router.put('/complete/:bookingId', async (req, res) => {
   try {
+    const existing = await Booking.findById(req.params.bookingId);
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking nahi mili!'
+      });
+    }
+    if (
+      !sameId(existing.customer, req.user.id) &&
+      !sameId(existing.assignedWorker, req.user.id) &&
+      !isAdmin(req)
+    ) return forbid(res);
+    if (existing.status !== 'Confirmed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Sirf confirmed booking complete ho sakti hai!'
+      });
+    }
+
     const booking = await Booking.findByIdAndUpdate(
       req.params.bookingId,
       { status: 'Completed' },
@@ -431,6 +483,12 @@ router.put('/cancel/:bookingId', async (req, res) => {
       });
     }
 
+    if (
+      !sameId(booking.customer, req.user.id) &&
+      !sameId(booking.assignedWorker, req.user.id) &&
+      !isAdmin(req)
+    ) return forbid(res);
+
     if (booking.status === 'Completed') {
       return res.status(400).json({
         success: false,
@@ -475,7 +533,7 @@ router.put('/cancel/:bookingId', async (req, res) => {
 // ════════════════════════════════════════════════
 // 📌 10. ALL BOOKINGS (ADMIN)
 // ════════════════════════════════════════════════
-router.get('/all', async (req, res) => {
+router.get('/all', adminOnly, async (req, res) => {
   try {
     const bookings = await Booking.find()
       .populate('customer', 'name email phone')

@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
+const Booking = require('../models/Booking');
+const { protect } = require('../middleware/auth');
+
+router.use(protect);
 
 // Order banao
 router.post('/create-order', async (req, res) => {
@@ -12,14 +16,29 @@ router.post('/create-order', async (req, res) => {
       key_secret: process.env.RAZORPAY_SECRET
     });
 
-    const { amount, bookingId } = req.body;
+    const { bookingId } = req.body;
+
+    const booking = bookingId && await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking nahi mili!'
+      });
+    }
+    if (String(booking.customer) !== String(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Yeh aapki booking nahi hai!'
+      });
+    }
 
     const options = {
-      amount: amount * 100,
+      // Amount booking se aata hai, client se nahi
+      amount: Math.round(booking.price * 100),
       currency: 'INR',
       receipt: `booking_${bookingId}`,
       notes: {
-        bookingId
+        bookingId: String(bookingId)
       }
     };
 

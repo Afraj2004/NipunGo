@@ -10,12 +10,13 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// ── Config check ──────────────────────────────────────────
-console.log('Cloudinary Config:', {
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME ? '✅ Set' : '❌ Missing',
-  api_key:    process.env.CLOUDINARY_API_KEY    ? '✅ Set' : '❌ Missing',
-  api_secret: process.env.CLOUDINARY_API_SECRET ? '✅ Set' : '❌ Missing',
-});
+// ── Config check (only speaks up when something is missing) ──
+const missingCloudinary = [
+  'CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET',
+].filter((k) => !process.env[k]);
+if (missingCloudinary.length) {
+  console.warn('⚠️  Cloudinary not configured, missing:', missingCloudinary.join(', '));
+}
 
 const storage = new CloudinaryStorage({
   cloudinary,

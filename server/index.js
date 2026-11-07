@@ -5,6 +5,7 @@ const dotenv    = require('dotenv');
 const cors      = require('cors');
 const helmet    = require('helmet');
 const rateLimit = require('express-rate-limit');
+const mongoose  = require('mongoose');
 const connectDB = require('./config/db');
 
 dotenv.config();
@@ -19,14 +20,22 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:3000',
   'https://nipungo.vercel.app',
+  // Extra origins (custom domain etc.), comma separated in env
+  ...(process.env.CLIENT_URL || '')
+    .split(',')
+    .map((o) => o.trim().replace(/\/$/, ''))
+    .filter(Boolean),
 ];
+
+// Vercel preview deployments: https://nipungo-<hash>-<team>.vercel.app
+const previewOrigin = /^https:\/\/nipungo[a-z0-9-]*\.vercel\.app$/;
 
 const corsOptions = {
   origin: function (origin, callback) {
     // No origin = Postman / curl / mobile — allow
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(origin) || previewOrigin.test(origin)) {
       return callback(null, true);
     }
     console.log('CORS blocked origin:', origin);
@@ -117,6 +126,15 @@ app.use('/api/chat',    require('./routes/chat'));
 // ════════════════════════════════════════════════
 // 📌 HEALTH CHECK
 // ════════════════════════════════════════════════
+
+// Lightweight endpoint for uptime monitors (BetterStack etc.)
+app.get('/health', (req, res) => {
+  const dbUp = mongoose.connection.readyState === 1;
+  res.status(dbUp ? 200 : 503).json({
+    status: dbUp ? 'ok' : 'db-disconnected',
+    uptime: Math.round(process.uptime()),
+  });
+});
 
 app.get('/', (req, res) => {
   res.json({

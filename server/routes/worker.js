@@ -4,10 +4,38 @@ const express  = require('express');
 const router   = express.Router();
 const User     = require('../models/User');
 const { cloudinary, upload } = require('../config/cloudinary');
+const { protect } = require('../middleware/auth');
+
+// Sirf khud worker (ya admin) apni profile badal sakta hai
+const selfOrAdmin = (req, res, next) => {
+  if (String(req.params.workerId) !== String(req.user.id) &&
+      req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Aap sirf apni profile badal sakte ho!',
+    });
+  }
+  next();
+};
 
 // ════════════════════════════════════════════════
 // ⚠️ ROUTE ORDER — Specific pehle, Generic baad mein
 // ════════════════════════════════════════════════
+
+// ── 0. SERVICE-WISE AVAILABLE WORKER COUNT (public) ──────
+router.get('/availability', async (req, res) => {
+  try {
+    const rows = await User.aggregate([
+      { $match: { role: 'worker', isAvailable: true } },
+      { $group: { _id: '$service', count: { $sum: 1 } } },
+    ]);
+    const availability = {};
+    rows.forEach((r) => { if (r._id) availability[r._id] = r.count; });
+    res.json({ success: true, availability });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server Error!' });
+  }
+});
 
 // ── 1. SABHI WORKERS ─────────────────────────────────────
 router.get('/all', async (req, res) => {
@@ -52,7 +80,7 @@ router.get('/service/:serviceName', async (req, res) => {
 });
 
 // ── 3. AVAILABILITY TOGGLE ────────────────────────────────
-router.put('/availability/:workerId', async (req, res) => {
+router.put('/availability/:workerId', protect, selfOrAdmin, async (req, res) => {
   try {
     const { isAvailable } = req.body;
 
@@ -95,7 +123,7 @@ router.put('/availability/:workerId', async (req, res) => {
 });
 
 // ── 4. PROFILE UPDATE (Text Fields) ──────────────────────
-router.put('/update/:workerId', async (req, res) => {
+router.put('/update/:workerId', protect, selfOrAdmin, async (req, res) => {
   try {
     const { service, city, price, experience, about } = req.body;
 
@@ -153,6 +181,8 @@ router.put('/update/:workerId', async (req, res) => {
 // ⚠️ Multer error middleware alag se handle karna padega
 router.put(
   '/upload-photo/:workerId',
+  protect,
+  selfOrAdmin,
   // ── Multer middleware — error pehle pakdo ──────────────
   (req, res, next) => {
     upload.single('photo')(req, res, (err) => {
@@ -259,7 +289,7 @@ router.put(
 );
 
 // ── 6. PHOTO DELETE ───────────────────────────────────────
-router.delete('/delete-photo/:workerId', async (req, res) => {
+router.delete('/delete-photo/:workerId', protect, selfOrAdmin, async (req, res) => {
   try {
     console.log('=== PHOTO DELETE START ===');
     console.log('Worker ID:', req.params.workerId);

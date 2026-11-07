@@ -24,6 +24,9 @@ jobs:
           cache-dependency-path: client/package-lock.json
       - run: npm ci
       # CI=false so existing lint warnings don't fail the build
+      - run: npm test -- --watchAll=false
+        env:
+          CI: true
       - run: npm run build
         env:
           CI: false
@@ -44,5 +47,6 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci
+      - run: npm test
       # Load every route/config module to catch syntax and missing-dependency errors
       - run: node -e "['./config/gemini','./config/cloudinary','./routes/auth','./routes/booking','./routes/worker','./routes/admin','./routes/review','./routes/payment','./routes/recommendations','./routes/chat'].forEach(m=>require(m));console.log('modules load ok')"
