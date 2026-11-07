@@ -3,13 +3,16 @@
 // survives page navigation and reloads. After CHAT_EXPIRY_MS without any
 // activity the chat is deleted and the user starts a fresh one.
 
+import { TILES } from '../data/chatKnowledge';
+
 export const CHAT_EXPIRY_MINUTES =
   Number(process.env.REACT_APP_CHAT_EXPIRY_MINUTES) || 30;
 export const CHAT_EXPIRY_MS = CHAT_EXPIRY_MINUTES * 60 * 1000;
 
 export const GREETING = {
   role: 'bot',
-  text: 'Namaste! Main Nipun AI hoon. Aapki ghar ki kya samasya hai?',
+  text: 'Namaste! Main Nipun AI hoon. 🙏\nAapki ghar ki kya samasya hai? Neeche se chuno ya mujhe likh kar batao.',
+  options: TILES,
 };
 
 const PREFIX = 'nipungo_chat_';
@@ -22,7 +25,7 @@ export const isExpired = (lastActive, now = Date.now(), expiryMs = CHAT_EXPIRY_M
   !lastActive || now - lastActive > expiryMs;
 
 // Returns { chat, expired }.
-//  chat    - { messages, suggestion, lastActive } or null
+//  chat    - { messages, flow, lastActive } or null
 //  expired - true when a stored chat was found but had timed out (and was deleted)
 export const loadChat = (userId, now = Date.now()) => {
   try {
@@ -72,7 +75,7 @@ export const clearAllChats = () => {
 };
 
 // Turn the visible messages into what Gemini accepts:
-//  - skip our own error bubbles
+//  - skip our own error bubbles and the booking-form conversation
 //  - strictly alternate user/model, starting with a user turn
 //  - keep only the most recent turns, each trimmed
 // If the last stored turn is an unanswered user message (e.g. the request
@@ -80,7 +83,7 @@ export const clearAllChats = () => {
 export const buildChatPayload = (messages, newText) => {
   const turns = [];
   for (const m of messages) {
-    if (m.isError) continue;
+    if (m.isError || m.isFlow) continue;
     const text = String(m.text || '').slice(0, MAX_CHARS_PER_TURN).trim();
     if (!text) continue;
     const role = m.role === 'user' ? 'user' : 'model';

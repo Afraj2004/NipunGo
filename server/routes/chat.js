@@ -3,6 +3,23 @@ const router = express.Router();
 const { sendChatMessage } = require('../config/gemini');
 const { protect } = require('../middleware/auth');
 const { SERVICE_PRICES, getBookingTotal } = require('../config/services');
+const rateLimit = require('express-rate-limit');
+const ChatCache = require('../models/ChatCache');
+const { normalizeQuery, cacheKey, isCacheable } = require('../utils/chatText');
+
+// AI calls cost money: cap each user (not each IP) to a sensible rate
+const aiLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 20,
+  keyGenerator: (req) => String(req.user?.id || 'anonymous'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { keyGeneratorIpFallback: false },
+  message: {
+    success: false,
+    message: 'Bahut zyada sawal! Thodi der baad dobara try karo.',
+  },
+});
 
 // Pull the BOOKING_SUGGESTION JSON out of the reply and validate it,
 // so the client only ever gets a real service with the real price.
@@ -40,7 +57,7 @@ const sanitizeHistory = (history) => {
   return clean;
 };
 
-router.post('/message', protect, async (req, res) => {
+router.post('/message', protect, aiLimiter, async (req, res) => {
   const { message, history } = req.body; // history: [{role: "user"|"model", parts: [{text}]}]
 
   if (typeof message !== 'string' || !message.trim()) {
@@ -51,8 +68,40 @@ router.post('/message', protect, async (req, res) => {
   }
 
   try {
-    const reply = await sendChatMessage(message, sanitizeHistory(history));
+    const cleanHistory = sanitizeHistory(history);
+
+    // A standalone first question that was answered before costs nothing
+    const normalized = normalizeQuery(message);
+    const cacheable = cleanHistory.length === 0 && isCacheable(normalized);
+    const key = cacheable ? cacheKey(normalized) : null;
+
+    if (cacheable) {
+      try {
+        const hit = await ChatCache.findOneAndUpdate({ key }, { $inc: { hits: 1 } });
+        if (hit) {
+          return res.json({
+            success: true,
+            reply: hit.reply,
+            suggestion: hit.suggestion,
+            intent: hit.suggestion ? 'book' : 'chat',
+            cached: true,
+          });
+        }
+      } catch (cacheErr) {
+        console.error('Chat cache read failed:', cacheErr.message);
+      }
+    }
+
+    const reply = await sendChatMessage(message, cleanHistory);
     const suggestion = extractSuggestion(reply);
+
+    if (cacheable) {
+      ChatCache.updateOne(
+        { key },
+        { $setOnInsert: { key, query: normalized, reply, suggestion, hits: 0 } },
+        { upsert: true }
+      ).catch((e) => console.error('Chat cache write failed:', e.message));
+    }
 
     res.json({
       success: true,

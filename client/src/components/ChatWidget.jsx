@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from '../utils/axios';
+import RichText from './RichText';
 import {
   CHAT_EXPIRY_MINUTES,
   GREETING,
@@ -11,9 +12,28 @@ import {
   clearChat,
   buildChatPayload,
 } from '../utils/chatStorage';
+import { startBooking, stepFlow, isYes } from '../utils/chatFlow';
+import {
+  TILES,
+  MENU_OPTION,
+  bookOption,
+  getIntent,
+  matchIntent,
+  replyFor,
+  shouldUseKnowledgeBase,
+  totalPrice,
+} from '../data/chatKnowledge';
 
 const EXPIRED_NOTICE =
   'Inactivity ki wajah se pichli chat expire ho gayi. Nayi chat shuru karo. 🙂';
+
+const MENU_MESSAGE = {
+  role: 'bot',
+  text: 'Kis cheez mein madad chahiye? Neeche se chuno ya likh kar batao.',
+  options: TILES,
+};
+
+const LOGIN_OPTION = { label: '🔐 Login karo', action: 'navigate', value: '/login' };
 
 const readUser = () => {
   try {
@@ -23,11 +43,35 @@ const readUser = () => {
   }
 };
 
-// Floating Nipun AI chat. Mounted once at app level, so the conversation
-// stays alive while the customer moves between pages.
+const flowTag = (m) => ({ ...m, isFlow: true });
+
+// Quick-reply buttons under the latest bot message
+function Options({ options, disabled, onPick }) {
+  const isTileGrid = options.length > 6 && options[0].action === 'tile';
+  return (
+    <div className={isTileGrid ? 'grid grid-cols-2 gap-2 mt-3' : 'flex flex-wrap gap-2 mt-3'}>
+      {options.map((o, i) => (
+        <button
+          key={`${o.label}-${i}`}
+          type="button"
+          disabled={disabled}
+          onClick={() => onPick(o)}
+          className={`rounded-xl border border-primary/30 bg-white text-primary font-medium
+            px-3 py-2 text-sm lg:text-base shadow-sm hover:bg-primary hover:text-white transition
+            disabled:opacity-50 ${isTileGrid ? 'text-left' : 'text-center'}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Floating Nipun AI chat. Mounted once at app level, so it is on every page and
+// the conversation stays alive while the user moves between pages.
 function ChatWidget() {
   const navigate = useNavigate();
-  const location = useLocation();
+  useLocation(); // re-render on every navigation so we pick up login state
 
   // Re-render on login/logout even when the route doesn't change
   const [, setAuthTick] = useState(0);
@@ -41,63 +85,53 @@ function ChatWidget() {
     };
   }, []);
 
-  // Re-read on every render; the router re-renders us on each navigation
   const user = readUser();
   const userId = user?.id;
   const isCustomer = !!userId && user.role !== 'worker' && user.role !== 'admin';
-  const onAuthPage = ['/login', '/register'].includes(location.pathname);
-  const visible = isCustomer && !onAuthPage;
+  const storageId = userId || 'guest';
 
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState([GREETING]);
-  const [suggestion, setSuggestion] = useState(null);
+  const [flow, setFlow] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notice, setNotice] = useState('');
 
   const lastActiveRef = useRef(null); // null = no conversation yet
   const endRef = useRef(null);
 
+  const resetConversation = useCallback((withNotice = '') => {
+    lastActiveRef.current = null;
+    setMessages([GREETING]);
+    setFlow(null);
+    setNotice(withNotice);
+  }, []);
+
   // Load this user's saved chat (or start fresh) whenever the user changes
   useEffect(() => {
-    if (!isCustomer) {
-      lastActiveRef.current = null;
-      setMessages([GREETING]);
-      setSuggestion(null);
-      setNotice('');
-      setIsOpen(false);
-      return;
-    }
-    const { chat, expired } = loadChat(userId);
+    const { chat, expired } = loadChat(storageId);
     lastActiveRef.current = chat?.lastActive || null;
     setMessages(chat?.messages || [GREETING]);
-    setSuggestion(chat?.suggestion || null);
+    setFlow(chat?.flow && chat.flow.step !== 'submitting' ? chat.flow : null);
     setNotice(expired ? EXPIRED_NOTICE : '');
-  }, [userId, isCustomer]);
+    setIsLoading(false);
+  }, [storageId]);
 
   // Persist after every change once the conversation has started
   useEffect(() => {
-    if (isCustomer && lastActiveRef.current) {
-      saveChat(userId, {
-        messages,
-        suggestion,
-        lastActive: lastActiveRef.current,
-      });
+    if (lastActiveRef.current) {
+      saveChat(storageId, { messages, flow, lastActive: lastActiveRef.current });
     }
-  }, [messages, suggestion, userId, isCustomer]);
+  }, [messages, flow, storageId]);
 
   // Wipe the conversation if the inactivity window has passed.
   // Returns true when it expired.
   const expireIfNeeded = useCallback(() => {
-    if (!isCustomer || !lastActiveRef.current) return false;
-    if (!isExpired(lastActiveRef.current)) return false;
-    clearChat(userId);
-    lastActiveRef.current = null;
-    setMessages([GREETING]);
-    setSuggestion(null);
-    setNotice(EXPIRED_NOTICE);
+    if (!lastActiveRef.current || !isExpired(lastActiveRef.current)) return false;
+    clearChat(storageId);
+    resetConversation(EXPIRED_NOTICE);
     return true;
-  }, [userId, isCustomer]);
+  }, [storageId, resetConversation]);
 
   // Check regularly, and whenever the tab becomes active again
   useEffect(() => {
@@ -115,42 +149,143 @@ function ChatWidget() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading, isOpen, notice]);
 
-  const handleSend = async () => {
-    const text = input.trim();
-    if (!text || isLoading) return;
+  const addMessages = (msgs) => setMessages((prev) => [...prev, ...msgs]);
+  const touch = () => { lastActiveRef.current = Date.now(); };
 
-    // Timed out while the user was away: reset and let them start again.
-    // Their typed text stays in the box.
-    if (expireIfNeeded()) return;
+  // ── Booking ──────────────────────────────────────────
+  const beginBooking = async (service) => {
+    if (!isCustomer) {
+      addMessages([
+        {
+          role: 'bot',
+          text: userId
+            ? 'Booking sirf customer account se ho sakti hai.'
+            : `${service} book karne ke liye pehle login karo, phir main yahin se booking kar dunga.`,
+          options: userId ? [MENU_OPTION] : [LOGIN_OPTION, MENU_OPTION],
+        },
+      ]);
+      return;
+    }
+    setIsLoading(true);
+    let lastAddress = null;
+    try {
+      const res = await axios.get(`/booking/my-bookings/${userId}`);
+      lastAddress = res.data.bookings?.find((b) => b.address)?.address || null;
+    } catch {
+      // not essential - the user can just type the address
+    }
+    const started = startBooking(service, { lastAddress });
+    setFlow(started.flow);
+    addMessages(started.messages.map(flowTag));
+    setIsLoading(false);
+  };
+
+  const submitBooking = async (payload, flowAtSubmit) => {
+    setIsLoading(true);
+    try {
+      const res = await axios.post('/booking/create', payload);
+      if (res.data.success) {
+        setFlow(null);
+        addMessages([
+          flowTag({
+            role: 'bot',
+            text:
+              `✅ Booking request bhej di gayi!\n\n${res.data.message || ''}\n\n` +
+              'Jaise hi koi worker accept karega, aapko Dashboard mein dikh jayega. 🙌',
+            options: [
+              { label: '📋 Booking track karo', action: 'navigate', value: '/dashboard' },
+              MENU_OPTION,
+            ],
+          }),
+        ]);
+      } else {
+        setFlow(null);
+        addMessages([
+          flowTag({
+            role: 'bot',
+            text: `😔 ${res.data.message || 'Booking nahi ho payi.'}`,
+            options: [MENU_OPTION],
+          }),
+        ]);
+      }
+    } catch (err) {
+      console.error('Chat booking error:', err);
+      if (err.response?.status === 401) {
+        setFlow(null);
+        addMessages([
+          flowTag({
+            role: 'bot',
+            isError: true,
+            text: 'Aapka session expire ho gaya hai. Please dobara login karo.',
+            options: [LOGIN_OPTION],
+          }),
+        ]);
+      } else {
+        // Keep the details so they can retry with one tap
+        setFlow({ ...flowAtSubmit, step: 'confirm' });
+        addMessages([
+          flowTag({
+            role: 'bot',
+            isError: true,
+            text:
+              err.response?.data?.message ||
+              'Booking abhi nahi ho payi. Kya dobara try karein?',
+            options: [
+              { label: '🔁 Haan, dobara try karo', action: 'flow', value: '__confirm' },
+              { label: '❌ Cancel', action: 'flow', value: '__cancel' },
+            ],
+          }),
+        ]);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── AI (only for questions our answers don't cover) ──
+  const askAI = async (text) => {
+    if (!isCustomer) {
+      addMessages([
+        {
+          role: 'bot',
+          text:
+            'Is sawal ka jawab dene ke liye pehle login karo. ' +
+            (userId ? '(AI expert sirf customers ke liye hai.) ' : '') +
+            'Tab tak neeche se koi option chuno:',
+          options: userId ? TILES : [LOGIN_OPTION, ...TILES],
+        },
+      ]);
+      return;
+    }
 
     const { message, history } = buildChatPayload(messages, text);
-
-    setNotice('');
-    setInput('');
-    setMessages((prev) => [...prev, { role: 'user', text }]);
-    lastActiveRef.current = Date.now();
     setIsLoading(true);
-
     try {
-      const res = await axios.post(
-        '/chat/message',
-        { message, history },
-        { timeout: 60000 }
-      );
-      setMessages((prev) => [...prev, { role: 'bot', text: res.data.reply }]);
-      if (res.data.suggestion) setSuggestion(res.data.suggestion);
-      lastActiveRef.current = Date.now();
+      const res = await axios.post('/chat/message', { message, history }, { timeout: 60000 });
+      const suggestion = res.data.suggestion;
+      addMessages([
+        {
+          role: 'bot',
+          text: res.data.reply,
+          options: suggestion
+            ? [bookOption(suggestion.service), MENU_OPTION]
+            : [MENU_OPTION],
+          ...(suggestion
+            ? { priceNote: `Estimated: ₹${suggestion.price || totalPrice(suggestion.service)}` }
+            : {}),
+        },
+      ]);
     } catch (err) {
       console.error('AI Chat Error:', err);
       const sessionOver = err.response?.status === 401;
-      setMessages((prev) => [
-        ...prev,
+      addMessages([
         {
           role: 'bot',
           isError: true,
           text: sessionOver
             ? 'Aapka session expire ho gaya hai. Please dobara login karo.'
-            : 'Nipun AI abhi available nahi hai. Thodi der baad dobara try karo. 🙏',
+            : 'Nipun AI abhi available nahi hai. Neeche se koi option chuno ya thodi der baad try karo. 🙏',
+          options: sessionOver ? [LOGIN_OPTION] : [MENU_OPTION],
         },
       ]);
     } finally {
@@ -158,7 +293,57 @@ function ChatWidget() {
     }
   };
 
-  if (!visible) return null;
+  // ── One entry point for typed text and tile clicks ───
+  const processInput = async ({ text, label, action, value }) => {
+    if (isLoading) return;
+    if (action === 'navigate') {
+      setIsOpen(false);
+      navigate(value);
+      return;
+    }
+    if (expireIfNeeded()) return; // timed out: start again (typed text stays)
+
+    const shown = (label || text || '').trim();
+    if (!shown) return;
+
+    touch();
+    setNotice('');
+    setInput('');
+    setMessages((prev) => [...prev, { role: 'user', text: shown, ...(flow ? { isFlow: true } : {}) }]);
+
+    // 1) Inside the booking conversation
+    if (flow && flow.step !== 'submitting') {
+      const res = stepFlow(flow, { text: shown, value: action === 'flow' ? value : undefined });
+      setFlow(res.flow);
+      addMessages(res.messages.map(flowTag));
+      if (res.submit) submitBooking(res.submit, res.flow);
+      return;
+    }
+
+    // 2) Buttons
+    if (action === 'book') return beginBooking(value);
+    if (action === 'menu') return addMessages([MENU_MESSAGE]);
+    if (action === 'tile') {
+      const intent = getIntent(value);
+      return addMessages(intent ? replyFor(intent) : [MENU_MESSAGE]);
+    }
+
+    // 3) Typed "yes" right after we offered a booking
+    const last = messages[messages.length - 1];
+    const offered = last?.options?.find((o) => o.action === 'book');
+    if (offered && isYes(shown)) return beginBooking(offered.value);
+
+    // 4) Ready-made answers first (instant, free) ...
+    if (shouldUseKnowledgeBase(shown)) {
+      const intent = matchIntent(shown);
+      if (intent) return addMessages(replyFor(intent));
+    }
+
+    // 5) ... AI only for everything else
+    return askAI(shown);
+  };
+
+  const lastIndex = messages.length - 1;
 
   return (
     <div className="fixed bottom-6 right-6 z-50">
@@ -172,54 +357,51 @@ function ChatWidget() {
           >
             <div className="bg-primary p-5 text-white font-bold text-lg flex justify-between items-center">
               <span>Nipun AI Expert 🤖</span>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="text-xl px-2"
-                aria-label="Close chat"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => { clearChat(storageId); resetConversation(); }}
+                  className="text-sm font-medium px-2 py-1 rounded-lg hover:bg-white/20"
+                  aria-label="Start a new chat"
+                  title="Nayi chat"
+                >
+                  🔄 Nayi chat
+                </button>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="text-xl px-2"
+                  aria-label="Close chat"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
               {messages.map((m, i) => (
-                <div
-                  key={i}
-                  className={`px-4 py-3 rounded-2xl max-w-[88%] shadow-sm ${
-                    m.role === 'user'
-                      ? 'bg-primary text-white self-end'
-                      : 'bg-gray-100 self-start text-gray-800'
-                  }`}
-                >
-                  {/* Hide the raw JSON / code fence from the user */}
-                  <p className="text-base lg:text-lg leading-relaxed whitespace-pre-wrap">
-                    {m.text.split(/```|\{/)[0].trim()}
-                  </p>
+                <div key={i} className={m.role === 'user' ? 'self-end max-w-[88%]' : 'self-start max-w-[94%]'}>
+                  <div
+                    className={`px-4 py-3 rounded-2xl shadow-sm text-base lg:text-lg leading-relaxed ${
+                      m.role === 'user'
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}
+                  >
+                    <RichText text={m.text} />
+                    {m.priceNote && (
+                      <div className="mt-2 text-sm text-gray-500">💰 {m.priceNote}</div>
+                    )}
+                  </div>
+                  {i === lastIndex && m.role === 'bot' && m.options?.length > 0 && (
+                    <Options
+                      options={m.options}
+                      disabled={isLoading}
+                      onPick={(o) =>
+                        processInput({ text: o.label, label: o.label, action: o.action, value: o.value })
+                      }
+                    />
+                  )}
                 </div>
               ))}
-
-              {suggestion && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-green-50 border border-green-200 p-3 rounded-xl mt-2"
-                >
-                  <p className="text-sm text-green-700 font-bold mb-2">
-                    ✨ Nipun AI Recommendation:
-                  </p>
-                  <button
-                    onClick={() => {
-                      const { service } = suggestion;
-                      setSuggestion(null);
-                      setIsOpen(false);
-                      navigate(`/booking/${encodeURIComponent(service)}`);
-                    }}
-                    className="w-full bg-green-500 text-white py-3 rounded-lg text-sm font-bold shadow-md hover:bg-green-600 transition"
-                  >
-                    Book {suggestion.service} now (₹{suggestion.price})
-                  </button>
-                </motion.div>
-              )}
 
               {isLoading && (
                 <div className="text-sm text-gray-400 animate-pulse">
@@ -241,14 +423,14 @@ function ChatWidget() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSend();
+                    if (e.key === 'Enter') processInput({ text: input });
                   }}
                   maxLength={500}
                   className="flex-1 border rounded-xl px-4 py-3 text-base outline-none focus:border-primary"
-                  placeholder="Describe your problem..."
+                  placeholder={flow ? 'Apna jawab likho ya tile chuno...' : 'Describe your problem...'}
                 />
                 <button
-                  onClick={handleSend}
+                  onClick={() => processInput({ text: input })}
                   disabled={isLoading}
                   className="bg-primary text-white px-5 py-3 rounded-xl font-semibold disabled:opacity-60"
                 >

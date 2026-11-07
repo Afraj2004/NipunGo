@@ -12,7 +12,7 @@ beforeEach(() => localStorage.clear());
 
 const sample = (lastActive) => ({
   messages: [GREETING, { role: 'user', text: 'pipe leak' }],
-  suggestion: { service: 'Plumber', price: 250 },
+  flow: { service: 'Plumber', step: 'date', data: {} },
   lastActive,
 });
 
@@ -30,7 +30,7 @@ describe('chat expiry', () => {
     const { chat, expired } = loadChat('u1', now);
     expect(expired).toBe(false);
     expect(chat.messages).toHaveLength(2);
-    expect(chat.suggestion.service).toBe('Plumber');
+    expect(chat.flow.service).toBe('Plumber');
   });
 
   test('an inactive chat expires and is deleted', () => {
@@ -64,6 +64,20 @@ describe('chat expiry', () => {
 });
 
 describe('buildChatPayload', () => {
+  test('booking-form messages are not sent to the AI', () => {
+    const { history } = buildChatPayload(
+      [
+        GREETING,
+        { role: 'user', text: 'pipe leak' },
+        { role: 'bot', text: 'Plumber chahiye?' },
+        { role: 'user', text: 'Haan', isFlow: true },
+        { role: 'bot', text: 'Kis din?', isFlow: true },
+      ],
+      'aur kuch'
+    );
+    expect(history.map((h) => h.parts[0].text)).toEqual(['pipe leak', 'Plumber chahiye?']);
+  });
+
   test('drops greeting, keeps strict user/model alternation', () => {
     const { message, history } = buildChatPayload(
       [GREETING, { role: 'user', text: 'a' }, { role: 'bot', text: 'b' }],
