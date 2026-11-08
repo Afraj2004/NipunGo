@@ -142,7 +142,7 @@ function Home() {
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary opacity-10 rounded-full blur-3xl"></div>
         <div className="absolute top-1/2 left-1/2 w-48 h-48 bg-indigo-400 opacity-10 rounded-full blur-2xl"></div>
 
-        <div className="text-center px-4 z-10 max-w-4xl mx-auto">
+        <div className="text-center px-4 z-10 w-full max-w-4xl mx-auto">
 
           {/* Badge */}
           <motion.div
@@ -159,7 +159,7 @@ function Home() {
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight"
+            className="text-4xl sm:text-5xl md:text-7xl font-bold text-white mb-6 leading-tight"
           >
             Expert Services
             <br />
@@ -189,11 +189,11 @@ function Home() {
             <input
               type="text"
               placeholder="Kaunsi service chahiye?"
-              className="flex-1 px-4 py-3 text-gray-700 outline-none rounded-xl text-lg"
+              className="flex-1 min-w-0 px-3 sm:px-4 py-3 text-gray-700 outline-none rounded-xl text-base sm:text-lg"
             />
             <button
               onClick={() => navigate('/services')}
-              className="bg-primary text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition"
+              className="flex-shrink-0 whitespace-nowrap bg-primary text-white px-4 sm:px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition"
             >
               Search 🔍
             </button>

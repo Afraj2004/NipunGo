@@ -96,6 +96,7 @@ function ChatWidget() {
   const [flow, setFlow] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notice, setNotice] = useState('');
+  const [fabHidden, setFabHidden] = useState(false);
 
   const lastActiveRef = useRef(null); // null = no conversation yet
   const endRef = useRef(null);
@@ -145,9 +146,26 @@ function ChatWidget() {
     };
   }, [expireIfNeeded]);
 
+  // Follow the conversation, but when it is just the welcome message keep the top in view
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > 1 || isLoading || notice) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, isLoading, isOpen, notice]);
+
+  // The round button slides away while the page scrolls down (so it never covers a button
+  // the user is reaching for) and comes back as soon as they scroll up or stop near the top.
+  useEffect(() => {
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (y > lastY + 8 && y > 120) setFabHidden(true);
+      else if (y < lastY - 8 || y <= 120) setFabHidden(false);
+      lastY = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const addMessages = (msgs) => setMessages((prev) => [...prev, ...msgs]);
   const touch = () => { lastActiveRef.current = Date.now(); };
@@ -351,7 +369,7 @@ function ChatWidget() {
   const lastIndex = messages.length - 1;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50">
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -365,15 +383,15 @@ function ChatWidget() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => { clearChat(storageId); resetConversation(); }}
-                  className="text-sm font-medium px-2 py-1 rounded-lg hover:bg-white/20"
+                  className="text-sm font-medium min-w-[40px] min-h-[40px] px-2 rounded-lg hover:bg-white/20"
                   aria-label="Start a new chat"
                   title="Nayi chat"
                 >
-                  🔄 Nayi chat
+                  🔄<span className="hidden sm:inline"> Nayi chat</span>
                 </button>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="text-xl px-2"
+                  className="text-xl min-w-[40px] min-h-[40px] px-2 rounded-lg hover:bg-white/20"
                   aria-label="Close chat"
                 >
                   ✕
@@ -455,7 +473,10 @@ function ChatWidget() {
           expireIfNeeded();
           setIsOpen((o) => !o);
         }}
-        className="bg-secondary w-16 h-16 rounded-full shadow-lg flex items-center justify-center text-3xl hover:scale-110 transition"
+        tabIndex={fabHidden && !isOpen ? -1 : 0}
+        className={`ml-auto bg-secondary w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-lg flex items-center justify-center text-2xl sm:text-3xl hover:scale-110 transition-all duration-300 ${
+          fabHidden && !isOpen ? 'translate-x-24 opacity-0 pointer-events-none' : ''
+        }`}
         aria-label="Open Nipun AI chat"
       >
         💬

@@ -340,7 +340,7 @@ function Register({ portal = 'customer' }) {
                       value={formData.service}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3.5 border border-gray-200 rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-indigo-100 transition bg-white"
+                      className={`w-full px-4 py-3.5 border border-gray-200 rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-indigo-100 transition bg-white ${formData.service ? 'text-gray-800' : 'text-gray-400'}`}
                     >
                       <option value="">Service chuno</option>
                       {Object.keys(SERVICE_PRICES).map((s) => (
@@ -447,7 +447,8 @@ function Register({ portal = 'customer' }) {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-1 top-1/2 w-11 h-11 flex items-center justify-center -translate-y-1/2 text-gray-400"
                   >
                     {showPassword ? '🙈' : '👁️'}
                   </button>

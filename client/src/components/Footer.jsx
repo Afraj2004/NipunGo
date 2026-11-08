@@ -81,13 +81,13 @@ function Footer() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="flex-1 px-4 py-3 rounded-xl text-gray-800 outline-none focus:ring-2 focus:ring-white"
+                  className="flex-1 min-w-0 px-4 py-3 rounded-xl text-gray-800 outline-none focus:ring-2 focus:ring-white"
                 />
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   type="submit"
-                  className="bg-secondary text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition whitespace-nowrap"
+                  className="flex-shrink-0 bg-secondary text-white px-4 sm:px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition whitespace-nowrap"
                 >
                   Subscribe →
                 </motion.button>
@@ -123,14 +123,14 @@ function Footer() {
             <div className="flex flex-col gap-2 mb-6">
               <a
                 href="mailto:support@nipungo.com"
-                className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm"
+                className="flex items-center gap-2 py-2 text-gray-400 hover:text-white transition text-sm"
               >
                 <span>📧</span>
                 support@nipungo.com
               </a>
               <a
                 href="tel:+919876543210"
-                className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm"
+                className="flex items-center gap-2 py-2 text-gray-400 hover:text-white transition text-sm"
               >
                 <span>📞</span>
                 +91 98765 43210
@@ -168,7 +168,7 @@ function Footer() {
                 <Link
                   key={link.label}
                   to={link.path}
-                  className="text-gray-400 hover:text-white transition text-sm hover:translate-x-1 transform inline-block"
+                  className="text-gray-400 hover:text-white transition text-sm hover:translate-x-1 transform inline-block py-1.5"
                 >
                   → {link.label}
                 </Link>
@@ -186,7 +186,7 @@ function Footer() {
                 <Link
                   key={link.label}
                   to={link.path}
-                  className="text-gray-400 hover:text-white transition text-sm hover:translate-x-1 transform inline-block"
+                  className="text-gray-400 hover:text-white transition text-sm hover:translate-x-1 transform inline-block py-1.5"
                 >
                   → {link.label}
                 </Link>
@@ -204,7 +204,7 @@ function Footer() {
                 <Link
                   key={link.label}
                   to={link.path}
-                  className="text-gray-400 hover:text-white transition text-sm hover:translate-x-1 transform inline-block"
+                  className="text-gray-400 hover:text-white transition text-sm hover:translate-x-1 transform inline-block py-1.5"
                 >
                   → {link.label}
                 </Link>
@@ -240,7 +240,7 @@ function Footer() {
 
       {/* ===== BOTTOM BAR ===== */}
       <div className="border-t border-gray-800">
-        <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="max-w-6xl mx-auto px-4 pt-6 pb-24 md:pb-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
 
             <p className="text-gray-400 text-sm">
@@ -263,7 +263,7 @@ function Footer() {
             <div className="text-gray-400 text-sm text-center md:text-right">
               <p>Made with ❤️ in India 🇮🇳</p>
               {showWorkerSite && showCustomerSite && (
-                <Link to="/worker/login" className="text-gray-500 hover:text-white text-xs transition">
+                <Link to="/worker/login" className="inline-block py-3 text-gray-500 hover:text-white text-xs transition">
                   👷 Worker ho? Yahan login / join karo
                 </Link>
               )}

@@ -3,6 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from '../utils/axios';
 
+// Workers type experience as "4" or "4 years" or "3 saal": only add "years" to a bare number
+const fmtExperience = (e) => {
+  const t = String(e || '').trim();
+  if (!t) return '2+ years';
+  return /^\d+(\.\d+)?\+?$/.test(t) ? `${t} years` : t;
+};
+
 function WorkerProfile() {
   const { workerId } = useParams();
   const navigate = useNavigate();
@@ -174,7 +181,7 @@ function WorkerProfile() {
               {[
                 {
                   label: "Experience",
-                  value: worker.experience || '2+ Years',
+                  value: fmtExperience(worker.experience),
                   icon: "💼"
                 },
                 {
@@ -190,7 +197,7 @@ function WorkerProfile() {
               ].map((stat, index) => (
                 <div
                   key={index}
-                  className="bg-white bg-opacity-15 rounded-xl p-3 text-center backdrop-blur-sm border border-white border-opacity-20"
+                  className="bg-white bg-opacity-20 rounded-xl p-3 text-center backdrop-blur-sm border border-white border-opacity-20"
                 >
                   <div className="text-xl mb-1">{stat.icon}</div>
                   <div className="text-white font-bold">
@@ -214,7 +221,7 @@ function WorkerProfile() {
               </h2>
               <p className="text-gray-600 leading-relaxed">
                 {worker.about ||
-                  `Professional ${worker.service} with ${worker.experience || '2+'} years of experience. Quality work guaranteed with best service!`
+                  `Professional ${worker.service} with ${fmtExperience(worker.experience)} of experience. Quality work guaranteed with best service!`
                 }
               </p>
             </div>
@@ -255,7 +262,7 @@ function WorkerProfile() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-gray-400">📧</span>
-                  <span className="text-gray-700">{worker.email || 'Booking confirm hone ke baad dikhega'}</span>
+                  <span className="text-gray-700 break-all min-w-0">{worker.email || 'Booking confirm hone ke baad dikhega'}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-gray-400">📍</span>
@@ -394,7 +401,7 @@ function WorkerProfile() {
         {/* Back Button */}
         <button
           onClick={() => navigate(-1)}
-          className="text-primary font-medium hover:underline flex items-center gap-1"
+          className="text-primary font-medium hover:underline flex items-center gap-1 py-2.5 pr-3"
         >
           ← Wapas Jao
         </button>

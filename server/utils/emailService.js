@@ -6,6 +6,17 @@ const escapeHtml = (value) =>
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ));
 
+// Escape every text value passed to a template, so a name or address like
+// `<img src=x onerror=...>` is shown as text and can't inject markup into an email.
+// Email addresses are left alone: they are used as the recipient, not rendered.
+const safe = (params) =>
+  Object.fromEntries(
+    Object.entries(params).map(([key, value]) => [
+      key,
+      typeof value === 'string' && !/email$/i.test(key) ? escapeHtml(value) : value
+    ])
+  );
+
 // ════════════════════════════════════════════════════════
 // 📌 EMAIL TEMPLATES
 // ════════════════════════════════════════════════════════
@@ -243,7 +254,8 @@ const baseTemplate = (content) => `
 // ════════════════════════════════════════════════════════
 
 // ── 1. Welcome Email ─────────────────────────────────────
-const sendWelcomeEmail = async ({ name, email, role }) => {
+const sendWelcomeEmail = async (params) => {
+  const { name, email, role } = safe(params);
   const isWorker = role === 'worker';
 
   const content = `
@@ -290,7 +302,7 @@ const sendWelcomeEmail = async ({ name, email, role }) => {
     `}
 
     <a
-      href="${process.env.CLIENT_URL}/services"
+      href="${process.env.CLIENT_URL}${isWorker ? '/worker/dashboard' : '/services'}"
       class="btn btn-block"
     >
       ${isWorker ? 'Dashboard Dekho →' : 'Services Dekho →'}
@@ -306,17 +318,8 @@ const sendWelcomeEmail = async ({ name, email, role }) => {
 };
 
 // ── 2. Booking Created Email (Customer ko) ───────────────
-const sendBookingCreatedEmail = async ({
-  customerName,
-  customerEmail,
-  service,
-  date,
-  time,
-  address,
-  price,
-  bookingId,
-  workersNotified
-}) => {
+const sendBookingCreatedEmail = async (params) => {
+  const { customerName, customerEmail, service, date, time, address, price, bookingId, workersNotified } = safe(params);
   const content = `
     <div class="greeting">
       Booking Request Mili! 🔍
@@ -365,7 +368,7 @@ const sendBookingCreatedEmail = async ({
     </div>
 
     <a
-      href="${process.env.CLIENT_URL}/dashboard"
+      href="${process.env.CLIENT_URL}/track/${bookingId}"
       class="btn btn-block"
     >
       Booking Status Dekho →
@@ -381,21 +384,8 @@ const sendBookingCreatedEmail = async ({
 };
 
 // ── 3. Worker Assigned Email (Customer ko) ───────────────
-const sendWorkerAssignedEmail = async ({
-  customerName,
-  customerEmail,
-  service,
-  date,
-  time,
-  address,
-  price,
-  bookingId,
-  workerName,
-  workerPhone,
-  workerCity,
-  workerRating,
-  workerExperience
-}) => {
+const sendWorkerAssignedEmail = async (params) => {
+  const { customerName, customerEmail, service, date, time, address, price, bookingId, workerName, workerPhone, workerCity, workerRating, workerExperience } = safe(params);
   const content = `
     <div class="greeting">
       Worker Mil Gaya! ✅
@@ -467,7 +457,7 @@ const sendWorkerAssignedEmail = async ({
     </div>
 
     <a
-      href="${process.env.CLIENT_URL}/dashboard"
+      href="${process.env.CLIENT_URL}/track/${bookingId}"
       class="btn btn-block"
     >
       Dashboard Dekho →
@@ -483,18 +473,8 @@ const sendWorkerAssignedEmail = async ({
 };
 
 // ── 4. New Job Email (Worker ko) ──────────────────────────
-const sendNewJobEmail = async ({
-  workerName,
-  workerEmail,
-  service,
-  date,
-  time,
-  address,
-  price,
-  bookingId,
-  customerName,
-  customerPhone
-}) => {
+const sendNewJobEmail = async (params) => {
+  const { workerName, workerEmail, service, date, time, address, price, bookingId, customerName, customerPhone } = safe(params);
   const content = `
     <div class="greeting">
       Naya Kaam Mila! 💼
@@ -578,15 +558,8 @@ const sendNewJobEmail = async ({
 };
 
 // ── 5. Booking Completed Email (Dono ko) ─────────────────
-const sendBookingCompletedEmail = async ({
-  customerName,
-  customerEmail,
-  workerName,
-  service,
-  date,
-  price,
-  bookingId
-}) => {
+const sendBookingCompletedEmail = async (params) => {
+  const { customerName, customerEmail, workerName, service, date, price, bookingId } = safe(params);
   const content = `
     <div class="greeting">
       Kaam Ho Gaya! 🎉
@@ -649,13 +622,8 @@ const sendBookingCompletedEmail = async ({
 };
 
 // ── 6. Booking Cancelled Email ────────────────────────────
-const sendBookingCancelledEmail = async ({
-  customerName,
-  customerEmail,
-  service,
-  date,
-  price
-}) => {
+const sendBookingCancelledEmail = async (params) => {
+  const { customerName, customerEmail, service, date, price } = safe(params);
   const content = `
     <div class="greeting">
       Booking Cancel Ho Gayi ❌

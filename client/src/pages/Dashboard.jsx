@@ -434,7 +434,7 @@ useEffect(() => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * index }}
                 whileHover={{ y: -3 }}
-                className="bg-white bg-opacity-15 backdrop-blur-sm rounded-2xl
+                className="bg-white bg-opacity-20 backdrop-blur-sm rounded-2xl
                   p-4 border border-white border-opacity-20"
               >
                 <div className={`text-2xl mb-2 ${
@@ -494,7 +494,7 @@ useEffect(() => {
         </AnimatePresence>
 
 <div className="mb-8">
-  <h2 className="text-white text-lg font-bold mb-3 flex items-center gap-2">
+  <h2 className="text-gray-800 text-lg font-bold mb-3 flex items-center gap-2">
     ✨ Suggested for Your Home
   </h2>
   <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">

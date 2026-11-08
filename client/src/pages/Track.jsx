@@ -205,7 +205,7 @@ function Track() {
     <div className="max-w-xl mx-auto px-4 py-8">
       <button
         onClick={() => navigate('/dashboard')}
-        className="text-sm text-gray-500 hover:text-primary mb-4"
+        className="text-sm text-gray-500 hover:text-primary mb-2 py-2.5 pr-3"
       >
         ← Meri bookings
       </button>

@@ -556,7 +556,7 @@ function WorkerDashboard() {
       {/* ══════════════════════════════════════════════════
           MAIN CONTENT
       ══════════════════════════════════════════════════ */}
-      <section className="max-w-5xl mx-auto px-4 -mt-12 pb-12">
+      <section className="max-w-5xl mx-auto px-4 -mt-12 pb-12 relative z-10">
 
         {/* New Request Alert */}
         <AnimatePresence>
@@ -915,7 +915,7 @@ function WorkerDashboard() {
                               </p>
                               <a
                                 href={`tel:${booking.customer?.phone}`}
-                                className="text-primary text-sm font-medium
+                                className="text-primary text-sm font-medium py-2
                                   flex items-center gap-1 hover:underline"
                               >
                                 📱 {booking.customer?.phone}

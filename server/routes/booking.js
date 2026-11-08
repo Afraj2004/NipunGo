@@ -28,6 +28,13 @@ const forbid = (res) => res.status(403).json({
 // ════════════════════════════════════════════════
 router.post('/create', async (req, res) => {
   try {
+    // Only customers book. (A worker booking their own service could accept their own request.)
+    if (req.user.role !== 'customer') {
+      return res.status(403).json({
+        success: false,
+        message: 'Booking sirf customer account se ho sakti hai!'
+      });
+    }
     const customerId = req.user.id;
     const {
       service, date,

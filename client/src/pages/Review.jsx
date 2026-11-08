@@ -196,7 +196,7 @@ function Review() {
               </label>
 
               {/* Stars */}
-              <div className="flex gap-3 justify-center mb-3">
+              <div className="flex gap-1 sm:gap-3 justify-center mb-3">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <motion.button
                     key={star}
@@ -206,7 +206,8 @@ function Review() {
                     onMouseLeave={() => setHoveredRating(0)}
                     whileHover={{ scale: 1.2 }}
                     whileTap={{ scale: 0.9 }}
-                    className="text-5xl transition-all duration-150"
+                    aria-label={`${star} star`}
+                    className="text-3xl sm:text-5xl p-1 transition-all duration-150"
                   >
                     <motion.span
                       animate={{
@@ -306,7 +307,7 @@ function Review() {
                 whileTap={{ scale: 0.98 }}
                 type="submit"
                 disabled={loading}
-                className="flex-1 bg-primary text-white py-3.5 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
+                className="flex-1 whitespace-nowrap bg-primary text-white py-3.5 px-3 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
               >
                 {loading ? (
                   '⏳ Submit Ho Raha Hai...'

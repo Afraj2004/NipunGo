@@ -36,4 +36,7 @@ const reviewSchema = new mongoose.Schema({
   }
 });
 
+// One review per booking, enforced by the database (not just by a check in the route)
+reviewSchema.index({ booking: 1 }, { unique: true });
+
 module.exports = mongoose.model('Review', reviewSchema);

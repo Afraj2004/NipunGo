@@ -762,7 +762,7 @@ function Booking() {
                 <label className="block text-gray-700 font-medium mb-3">
                   Time Slot Choose Karo
                 </label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {timeSlots.map((slot) => (
                     <motion.button
                       key={slot.time}

@@ -78,15 +78,21 @@ app.use(cors(corsOptions));
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
-    // Cloudinary images block na hon
-    contentSecurityPolicy:     false,
+    // This server only returns JSON, so nothing on it may load or be framed.
+    // (Cloudinary images load on the website, not through this API.)
+    contentSecurityPolicy: {
+      directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
+    },
   })
 );
 
 // Global Rate Limit
+// A generous ceiling for normal browsing: pages poll (tracking refreshes every 8s) and
+// several people can share one IP (family / office Wi-Fi). Login, OTP, password and AI
+// endpoints have their own much stricter limits.
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max:      200,
+  max:      1500,
   message: {
     success: false,
     message: 'Bahut zyada requests! Thodi der baad try karo.',
@@ -94,7 +100,7 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders:   false,
   // OPTIONS ko rate limit se bahar rakho
-  skip: (req) => req.method === 'OPTIONS',
+  skip: (req) => req.method === 'OPTIONS' || req.path === '/health',
 });
 app.use(globalLimiter);
 
@@ -105,6 +111,12 @@ app.use(globalLimiter);
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use(sanitizeRequest);
+
+// Responses contain personal data (bookings, profiles, OTP codes): never cache them
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 
 // ════════════════════════════════════════════════
 // 📌 REQUEST LOGGER

@@ -186,7 +186,7 @@ function ForgotPasswordModal({ open, onClose }) {
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+                      className="absolute right-1 top-1/2 w-11 h-11 flex items-center justify-center -translate-y-1/2 text-gray-400"
                     >
                       {showPassword ? '🙈' : '👁️'}
                     </button>
