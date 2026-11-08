@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from '../utils/axios';
+import OtpInput from '../components/OtpInput';
+import { SERVICE_PRICES } from '../data/chatKnowledge';
 
 function WorkerDashboard() {
   const navigate = useNavigate();
@@ -17,6 +19,10 @@ function WorkerDashboard() {
   const [isAvailable, setIsAvailable]         = useState(true);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [actionLoading, setActionLoading]     = useState('');
+  const [otpModal, setOtpModal]               = useState(null); // { booking, kind: 'start' | 'end' }
+  const [otpValue, setOtpValue]               = useState('');
+  const [otpError, setOtpError]               = useState('');
+  const [otpBusy, setOtpBusy]                 = useState(false);
 
   // ── Profile States ────────────────────────────────────
   const [profileData, setProfileData] = useState({
@@ -179,27 +185,52 @@ function WorkerDashboard() {
     }
   };
 
-  // ── Complete ──────────────────────────────────────────
-  const handleComplete = async (bookingId) => {
-    if (!window.confirm('Kaam complete ho gaya?')) return;
-    setActionLoading(bookingId + '_complete');
+  // ── On the way ────────────────────────────────────────
+  const handleOnTheWay = async (bookingId) => {
+    setActionLoading(bookingId + '_way');
     try {
-      const token = localStorage.getItem('token');
-      const res   = await axios.put(
-        `/booking/complete/${bookingId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.put(`/booking/on-the-way/${bookingId}`, {});
       if (res.data.success) {
         setMyBookings(prev =>
-          prev.map(b => b._id === bookingId ? { ...b, status: 'Completed' } : b)
+          prev.map(b => b._id === bookingId ? { ...b, onTheWayAt: res.data.booking.onTheWayAt } : b)
         );
-        alert('Bahut badhiya! Kaam complete ho gaya! 🌟');
       }
-    } catch {
-      alert('Kuch galat hua!');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Kuch galat hua!');
     } finally {
       setActionLoading('');
+    }
+  };
+
+  // ── Start / finish: needs the customer's 4-digit code ─
+  const openOtp = (booking, kind) => {
+    setOtpModal({ booking, kind });
+    setOtpValue('');
+    setOtpError('');
+  };
+  const closeOtp = () => { setOtpModal(null); setOtpValue(''); setOtpError(''); };
+
+  const submitOtp = async (e) => {
+    e.preventDefault();
+    if (otpValue.length !== 4) { setOtpError('4 digit ka code daalo!'); return; }
+    const { booking, kind } = otpModal;
+    setOtpBusy(true);
+    setOtpError('');
+    try {
+      const res = await axios.post(`/booking/${kind}/${booking._id}`, { otp: otpValue });
+      const done = res.data.booking;
+      setMyBookings(prev =>
+        prev.map(b => b._id === booking._id
+          ? { ...b, status: done.status, startedAt: done.startedAt, completedAt: done.completedAt }
+          : b)
+      );
+      closeOtp();
+      if (kind === 'end') alert('Bahut badhiya! Kaam complete ho gaya! 🌟');
+    } catch (err) {
+      setOtpError(err.response?.data?.message || 'Kuch galat hua!');
+      setOtpValue('');
+    } finally {
+      setOtpBusy(false);
     }
   };
 
@@ -380,7 +411,7 @@ function WorkerDashboard() {
   // ─────────────────────────────────────────────────────
   const stats = {
     newRequests: pendingRequests.length,
-    confirmed:   myBookings.filter(b => b.status === 'Confirmed').length,
+    confirmed:   myBookings.filter(b => b.status === 'Confirmed' || b.status === 'In Progress').length,
     completed:   myBookings.filter(b => b.status === 'Completed').length,
     earnings:    myBookings
       .filter(b => b.status === 'Completed')
@@ -390,16 +421,13 @@ function WorkerDashboard() {
   const getStatusColor = (status) => ({
     'Searching': 'bg-yellow-100 text-yellow-600 border border-yellow-200',
     'Confirmed': 'bg-blue-100   text-blue-600   border border-blue-200',
+    'In Progress': 'bg-purple-100 text-purple-600 border border-purple-200',
     'Completed': 'bg-green-100  text-green-600  border border-green-200',
     'Cancelled': 'bg-red-100    text-red-600    border border-red-200',
   }[status] || 'bg-gray-100 text-gray-600');
 
   // Service options — booking page ke saath match karein
-  const serviceOptions = [
-    'Plumber', 'Electrician', 'Carpenter',
-    'Painter', 'Cleaner', 'AC Repair',
-    'Appliance Repair', 'Pest Control',
-  ];
+  const serviceOptions = Object.keys(SERVICE_PRICES);
 
   // ─────────────────────────────────────────────────────
   // ── Loading Screen ────────────────────────────────────
@@ -934,23 +962,40 @@ function WorkerDashboard() {
                           {/* Action Buttons */}
                           <div className="flex gap-3">
                             {booking.status === 'Confirmed' && (
-                              <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => handleComplete(booking._id)}
-                                disabled={
-                                  actionLoading === booking._id + '_complete'
-                                }
-                                className="flex-1 bg-primary text-white py-3
-                                  rounded-xl font-bold hover:bg-indigo-700
-                                  transition shadow-lg shadow-indigo-200
-                                  disabled:opacity-60"
+                              <>
+                                {!booking.onTheWayAt ? (
+                                  <button
+                                    onClick={() => handleOnTheWay(booking._id)}
+                                    disabled={actionLoading === booking._id + '_way'}
+                                    className="flex-1 border-2 border-primary text-primary py-3
+                                      rounded-xl font-bold hover:bg-indigo-50 transition
+                                      disabled:opacity-60"
+                                  >
+                                    {actionLoading === booking._id + '_way' ? '⏳' : '🚗 On the way'}
+                                  </button>
+                                ) : (
+                                  <div className="flex-1 bg-blue-50 text-blue-600 border border-blue-200
+                                    py-3 rounded-xl font-semibold text-center text-sm">
+                                    🚗 Customer ko bata diya
+                                  </div>
+                                )}
+                                <button
+                                  onClick={() => openOtp(booking, 'start')}
+                                  className="flex-1 bg-primary text-white py-3 rounded-xl font-bold
+                                    hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
+                                >
+                                  ▶️ Start service
+                                </button>
+                              </>
+                            )}
+                            {booking.status === 'In Progress' && (
+                              <button
+                                onClick={() => openOtp(booking, 'end')}
+                                className="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold
+                                  hover:bg-green-700 transition shadow-lg shadow-green-200"
                               >
-                                {actionLoading === booking._id + '_complete'
-                                  ? '⏳ Updating...'
-                                  : '🎉 Mark as Complete'
-                                }
-                              </motion.button>
+                                ✅ Finish service
+                              </button>
                             )}
                             {booking.status === 'Completed' && (
                               <div className="flex-1 bg-green-50 text-green-600
@@ -1366,6 +1411,52 @@ function WorkerDashboard() {
           </div>
         </motion.div>
       </section>
+
+      {/* Customer's 4-digit code (start / finish) */}
+      {otpModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Customer code"
+        >
+          <div className="absolute inset-0 bg-black/50" onClick={closeOtp} />
+          <form
+            onSubmit={submitOtp}
+            className="relative bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+          >
+            <h3 className="text-lg font-bold text-gray-800 mb-1">
+              {otpModal.kind === 'start' ? '▶️ Kaam shuru karo' : '✅ Kaam poora karo'}
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Customer ke phone par dikh rahe{' '}
+              <strong>{otpModal.kind === 'start' ? 'START' : 'END'}</strong> code ko puchho aur yahan daalo.
+            </p>
+            {otpError && (
+              <div role="alert" className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-xl mb-4 text-sm">
+                ⚠️ {otpError}
+              </div>
+            )}
+            <OtpInput value={otpValue} onChange={(v) => { setOtpValue(v); setOtpError(''); }} length={4} />
+            <div className="flex gap-3 mt-5">
+              <button
+                type="button"
+                onClick={closeOtp}
+                className="flex-1 border-2 border-gray-200 text-gray-600 py-3 rounded-xl font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={otpBusy || otpValue.length !== 4}
+                className="flex-1 bg-primary text-white py-3 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-60"
+              >
+                {otpBusy ? '⏳ Wait...' : 'Confirm'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

@@ -26,6 +26,7 @@ const getStatusColor = (status) => {
   const colors = {
     'Searching': 'bg-orange-100 text-orange-600 border border-orange-200',
     'Confirmed': 'bg-blue-100 text-blue-600 border border-blue-200',
+    'In Progress': 'bg-purple-100 text-purple-600 border border-purple-200',
     'Completed': 'bg-green-100 text-green-600 border border-green-200',
     'Cancelled': 'bg-red-100 text-red-600 border border-red-200',
     'No Workers': 'bg-gray-100 text-gray-600 border border-gray-200',
@@ -37,6 +38,7 @@ const getStatusIcon = (status) => {
   const icons = {
     'Searching': '🔍',
     'Confirmed': '✅',
+    'In Progress': '🛠️',
     'Completed': '🎉',
     'Cancelled': '❌',
     'No Workers': '😔',
@@ -317,7 +319,7 @@ useEffect(() => {
   const stats = {
     total: bookings.length,
     searching: bookings.filter(b => b.status === 'Searching').length,
-    confirmed: bookings.filter(b => b.status === 'Confirmed').length,
+    confirmed: bookings.filter(b => b.status === 'Confirmed' || b.status === 'In Progress').length,
     completed: bookings.filter(b => b.status === 'Completed').length,
     cancelled: bookings.filter(b => b.status === 'Cancelled').length,
     totalSpent: bookings
@@ -329,6 +331,7 @@ useEffect(() => {
   const filteredBookings = bookings.filter(booking => {
     if (activeTab === 'all') return true;
     if (activeTab === 'searching') return booking.status === 'Searching';
+    if (activeTab === 'confirmed') return ['Confirmed', 'In Progress'].includes(booking.status);
     return booking.status.toLowerCase() === activeTab;
   });
 
@@ -729,7 +732,7 @@ useEffect(() => {
                           )}
 
                           {/* ── CONFIRMED: Worker details dikho ── */}
-                          {booking.status === 'Confirmed' &&
+                          {['Confirmed', 'In Progress'].includes(booking.status) &&
                             booking.assignedWorker && (
                             <WorkerDetailCard
                               worker={booking.assignedWorker}
@@ -764,8 +767,23 @@ useEffect(() => {
                             </span>
 
                             <div className="flex gap-2 flex-wrap">
-                              {/* Cancel — Searching bookings ke liye */}
-                              {booking.status === 'Searching' && (
+                              {/* Live tracking + codes */}
+                              {['Searching', 'Confirmed', 'In Progress'].includes(booking.status) && (
+                                <motion.button
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => navigate(`/track/${booking._id}`)}
+                                  className="bg-indigo-50 text-primary border
+                                    border-indigo-200 px-3 py-1.5 rounded-xl
+                                    text-sm font-medium hover:bg-indigo-100
+                                    transition"
+                                >
+                                  📍 Track
+                                </motion.button>
+                              )}
+
+                              {/* Cancel — until the work has started */}
+                              {['Searching', 'Confirmed'].includes(booking.status) && (
                                 <motion.button
                                   whileHover={{ scale: 1.05 }}
                                   whileTap={{ scale: 0.95 }}

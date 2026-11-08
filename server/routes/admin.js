@@ -33,7 +33,7 @@ router.get('/stats', async (req, res) => {
       User.countDocuments({ role: 'worker' }),
       Booking.countDocuments(),
       Booking.countDocuments({ status: 'Searching' }),
-      Booking.countDocuments({ status: 'Confirmed' }),
+      Booking.countDocuments({ status: { $in: ['Confirmed', 'In Progress'] } }),
       Booking.countDocuments({ status: 'Completed' }),
       Booking.countDocuments({ status: 'Cancelled' }),
       User.countDocuments({ role: 'worker', isVerified: true }),
@@ -216,7 +216,7 @@ router.put(
     body('status')
       .notEmpty()
       .withMessage('Status required hai!')
-      .isIn(['Searching', 'Confirmed', 'Completed', 'Cancelled', 'No Workers'])
+      .isIn(['Searching', 'Confirmed', 'In Progress', 'Completed', 'Cancelled', 'No Workers'])
       .withMessage('Valid status chahiye!')
   ],
   async (req, res) => {

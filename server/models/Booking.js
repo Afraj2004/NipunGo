@@ -64,6 +64,7 @@ const bookingSchema = new mongoose.Schema({
     enum: [
       'Searching',   // 👈 Workers dhundh rahe hain
       'Confirmed',   // Worker ne accept kiya
+      'In Progress', // Start OTP verify hua, kaam chal raha hai
       'Completed',   // Kaam ho gaya
       'Cancelled',   // Cancel ho gayi
       'No Workers'   // Koi worker available nahi tha
@@ -76,6 +77,14 @@ const bookingSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  onTheWayAt: { type: Date, default: null },   // worker tapped "On the way"
+  startedAt: { type: Date, default: null },    // start OTP verified
+  completedAt: { type: Date, default: null },  // end OTP verified
+  cancelledAt: { type: Date, default: null },
+
+  // Guessing protection for the 4-digit start/end codes
+  otpFailures: { type: Number, default: 0 },
+  otpLockedUntil: { type: Date, default: null },
   createdAt: {
     type: Date,
     default: Date.now

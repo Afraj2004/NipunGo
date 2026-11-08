@@ -16,6 +16,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import Review from './pages/Review';
 import WorkerDashboard from './pages/WorkerDashboard';
 import Profile from './pages/Profile';
+import Track from './pages/Track';
 import NotFound from './pages/NotFound';
 
 // One codebase, two sites:
@@ -48,6 +49,10 @@ function App() {
               <Route
                 path="/dashboard"
                 element={<RequireRole roles={['customer']}><Dashboard /></RequireRole>}
+              />
+              <Route
+                path="/track/:bookingId"
+                element={<RequireRole roles={['customer']}><Track /></RequireRole>}
               />
               <Route
                 path="/review/:bookingId"

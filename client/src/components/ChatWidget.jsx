@@ -194,7 +194,11 @@ function ChatWidget() {
               `✅ Booking request bhej di gayi!\n\n${res.data.message || ''}\n\n` +
               'Jaise hi koi worker accept karega, aapko Dashboard mein dikh jayega. 🙌',
             options: [
-              { label: '📋 Booking track karo', action: 'navigate', value: '/dashboard' },
+              {
+                label: '📍 Booking track karo',
+                action: 'navigate',
+                value: res.data.booking?._id ? `/track/${res.data.booking._id}` : '/dashboard',
+              },
               MENU_OPTION,
             ],
           }),

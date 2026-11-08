@@ -232,6 +232,7 @@ function AdminDashboard() {
     const colors = {
       'Searching': 'bg-orange-100 text-orange-600',
       'Confirmed': 'bg-blue-100 text-blue-600',
+      'In Progress': 'bg-purple-100 text-purple-600',
       'Completed': 'bg-green-100 text-green-600',
       'Cancelled': 'bg-red-100 text-red-600',
       'No Workers': 'bg-gray-100 text-gray-600',
@@ -1009,6 +1010,7 @@ function AdminDashboard() {
                             >
                               <option value="Searching">🔍 Searching</option>
                               <option value="Confirmed">✅ Confirmed</option>
+                              <option value="In Progress">🛠️ In Progress</option>
                               <option value="Completed">🎉 Completed</option>
                               <option value="Cancelled">❌ Cancelled</option>
                               <option value="No Workers">😔 No Workers</option>

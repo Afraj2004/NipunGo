@@ -7,6 +7,7 @@ const { cloudinary, upload } = require('../config/cloudinary');
 const jwt = require('jsonwebtoken');
 const Booking = require('../models/Booking');
 const { protect } = require('../middleware/auth');
+const { SERVICE_PRICES } = require('../config/services');
 
 // Public endpoints still want to know who is asking (if anyone) so that
 // contact details are only shown to people who are allowed to see them.
@@ -49,6 +50,13 @@ const withContactRules = async (workerDoc, viewer) => {
 
 // Sirf khud worker (ya admin) apni profile badal sakta hai
 const selfOrAdmin = (req, res, next) => {
+  // worker tools are for workers (and admins) only, never for customer accounts
+  if (req.user.role !== 'worker' && req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Yeh sirf worker accounts ke liye hai!',
+    });
+  }
   if (String(req.params.workerId) !== String(req.user.id) &&
       req.user.role !== 'admin') {
     return res.status(403).json({
@@ -170,10 +178,13 @@ router.put('/update/:workerId', protect, selfOrAdmin, async (req, res) => {
   try {
     const { service, city, price, experience, about } = req.body;
 
-    if (!service || !service.trim()) {
+    if (
+      typeof service !== 'string' ||
+      !Object.prototype.hasOwnProperty.call(SERVICE_PRICES, service)
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'Service select karna zaroori hai!',
+        message: 'Valid service select karo!',
       });
     }
 
@@ -283,7 +294,7 @@ router.put(
         // Cloudinary pe already upload ho gayi — wapas delete karo
         if (req.file.filename) {
           await cloudinary.uploader
-            .destroy(req.file.filename)
+            .destroy(req.file.filename, { invalidate: true })
             .catch(e => console.log('Cleanup error:', e.message));
         }
         return res.status(404).json({
@@ -296,7 +307,7 @@ router.put(
       if (worker.photoPublicId) {
         console.log('Deleting old photo:', worker.photoPublicId);
         await cloudinary.uploader
-          .destroy(worker.photoPublicId)
+          .destroy(worker.photoPublicId, { invalidate: true })
           .catch(e => console.log('Old photo delete error:', e.message));
       }
 
@@ -356,7 +367,7 @@ router.delete('/delete-photo/:workerId', protect, selfOrAdmin, async (req, res) 
     // ── Cloudinary se delete karo ─────────────────────
     console.log('Deleting from Cloudinary:', worker.photoPublicId);
     const cloudResult = await cloudinary.uploader
-      .destroy(worker.photoPublicId);
+      .destroy(worker.photoPublicId, { invalidate: true });
     console.log('Cloudinary delete result:', cloudResult);
 
     // ── DB update karo ────────────────────────────────

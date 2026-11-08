@@ -90,7 +90,7 @@ test('unknown questions go to the AI, and the reply shows no raw asterisks', asy
 test('the bot books on its own once the user agrees, no form needed', async () => {
   loginAs();
   axios.post.mockResolvedValue({
-    data: { success: true, message: 'Booking request 2 workers ko bheji gayi!' },
+    data: { success: true, message: 'Booking request 2 workers ko bheji gayi!', booking: { _id: 'b123' } },
   });
   render(<ChatWidget />);
   openChat();
@@ -118,7 +118,7 @@ test('the bot books on its own once the user agrees, no form needed', async () =
 
   // and it offers to take the user to their booking
   click(screen.getByText(/Booking track karo/));
-  expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+  expect(mockNavigate).toHaveBeenCalledWith('/track/b123');
 });
 
 test('a failed booking keeps the details and offers a retry', async () => {

@@ -11,6 +11,7 @@ const {
 } = require('../utils/emailService'); // 👈 NEW
 const { protect, adminOnly } = require('../middleware/auth');
 const { getBookingTotal } = require('../config/services');
+const { deriveOtp, verifyBookingOtp } = require('../utils/bookingOtp');
 
 // Har booking route pe login zaroori hai
 router.use(protect);
@@ -347,7 +348,7 @@ router.get('/worker-bookings/:workerId', async (req, res) => {
     }
     const bookings = await Booking.find({
       assignedWorker: req.params.workerId,
-      status: { $in: ['Confirmed', 'Completed', 'Cancelled'] }
+      status: { $in: ['Confirmed', 'In Progress', 'Completed', 'Cancelled'] }
     })
       .populate('customer', 'name email phone')
       .sort({ createdAt: -1 });
@@ -372,7 +373,7 @@ router.get('/single/:bookingId', async (req, res) => {
       .populate('customer', 'name email phone')
       .populate(
         'assignedWorker',
-        'name service phone city rating price experience about'
+        'name service phone city rating price experience about photoUrl'
       );
 
     if (!booking) {
@@ -388,7 +389,14 @@ router.get('/single/:bookingId', async (req, res) => {
       (booking.pendingWorkers || []).some(w => sameId(w, req.user.id));
     if (!involved && !isAdmin(req)) return forbid(res);
 
-    res.json({ success: true, booking });
+    const data = booking.toObject();
+    if (sameId(booking.customer, req.user.id)) {
+      data.otps = {};
+      if (booking.status === 'Confirmed') data.otps.start = deriveOtp(booking._id, 'start');
+      if (booking.status === 'In Progress') data.otps.end = deriveOtp(booking._id, 'end');
+    }
+
+    res.json({ success: true, booking: data });
 
   } catch (error) {
     res.status(500).json({
@@ -402,7 +410,7 @@ router.get('/single/:bookingId', async (req, res) => {
 // ════════════════════════════════════════════════
 // 📌 8. BOOKING COMPLETE
 // ════════════════════════════════════════════════
-router.put('/complete/:bookingId', async (req, res) => {
+router.put('/complete/:bookingId', adminOnly, async (req, res) => {
   try {
     const existing = await Booking.findById(req.params.bookingId);
     if (!existing) {
@@ -411,21 +419,16 @@ router.put('/complete/:bookingId', async (req, res) => {
         message: 'Booking nahi mili!'
       });
     }
-    if (
-      !sameId(existing.customer, req.user.id) &&
-      !sameId(existing.assignedWorker, req.user.id) &&
-      !isAdmin(req)
-    ) return forbid(res);
-    if (existing.status !== 'Confirmed') {
+    if (!['Confirmed', 'In Progress'].includes(existing.status)) {
       return res.status(400).json({
         success: false,
-        message: 'Sirf confirmed booking complete ho sakti hai!'
+        message: 'Sirf confirmed ya chal rahi booking complete ho sakti hai!'
       });
     }
 
     const booking = await Booking.findByIdAndUpdate(
       req.params.bookingId,
-      { status: 'Completed' },
+      { status: 'Completed', completedAt: new Date() },
       { new: true }
     )
       .populate('customer', 'name phone email')
@@ -495,10 +498,22 @@ router.put('/cancel/:bookingId', async (req, res) => {
         message: 'Completed booking cancel nahi ho sakti!'
       });
     }
+    if (booking.status === 'Cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Yeh booking pehle hi cancel ho chuki hai!'
+      });
+    }
+    if (booking.status === 'In Progress' && !isAdmin(req)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Kaam shuru ho chuka hai. Cancel karne ke liye support se baat karo.'
+      });
+    }
 
     const updatedBooking = await Booking.findByIdAndUpdate(
       req.params.bookingId,
-      { status: 'Cancelled', pendingWorkers: [] },
+      { status: 'Cancelled', pendingWorkers: [], cancelledAt: new Date() },
       { new: true }
     );
 
@@ -546,6 +561,174 @@ router.get('/all', adminOnly, async (req, res) => {
       total: bookings.length
     });
 
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server Error!',
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
+    });
+  }
+});
+
+// ════════════════════════════════════════════════
+// 📌 SERVICE TRACKING: on the way -> start OTP -> end OTP
+// ════════════════════════════════════════════════
+const MAX_OTP_TRIES = 5;
+const LOCK_MINUTES = 15;
+
+// Only the assigned worker may move their own job along
+const loadMyJob = async (req, res) => {
+  const booking = await Booking.findById(req.params.bookingId);
+  if (!booking) {
+    res.status(404).json({ success: false, message: 'Booking nahi mili!' });
+    return null;
+  }
+  if (!sameId(booking.assignedWorker, req.user.id)) {
+    forbid(res);
+    return null;
+  }
+  return booking;
+};
+
+// Reserve one guess atomically *before* checking the code, so a burst of parallel
+// requests can't test more than MAX_OTP_TRIES codes between lock-outs.
+// Returns { ok } when the code is right, otherwise sends the error response itself.
+const checkBookingCode = async (res, booking, kind, code) => {
+  const now = new Date();
+  const reserved = await Booking.findOneAndUpdate(
+    {
+      _id: booking._id,
+      $or: [{ otpLockedUntil: null }, { otpLockedUntil: { $lte: now } }]
+    },
+    { $inc: { otpFailures: 1 } },
+    { returnDocument: 'after' }
+  );
+
+  const lockNow = () => Booking.updateOne(
+    { _id: booking._id },
+    { otpLockedUntil: new Date(Date.now() + LOCK_MINUTES * 60 * 1000), otpFailures: 0 }
+  );
+
+  if (!reserved) {
+    res.status(429).json({
+      success: false,
+      message: `Bahut zyada galat OTP. ${LOCK_MINUTES} minute baad dobara try karo.`
+    });
+    return { ok: false };
+  }
+  if (reserved.otpFailures > MAX_OTP_TRIES) {
+    await lockNow();
+    res.status(429).json({
+      success: false,
+      message: `Bahut zyada galat OTP. ${LOCK_MINUTES} minute baad dobara try karo.`
+    });
+    return { ok: false };
+  }
+
+  if (verifyBookingOtp(booking._id, kind, code)) return { ok: true };
+
+  const left = MAX_OTP_TRIES - reserved.otpFailures;
+  if (left <= 0) await lockNow();
+  res.status(400).json({
+    success: false,
+    message: left > 0
+      ? `OTP galat hai! ${left} attempt bache hain.`
+      : `OTP galat hai! Bahut zyada attempts, ${LOCK_MINUTES} minute ke liye lock.`
+  });
+  return { ok: false };
+};
+
+// Worker: "I'm on my way" (shown to the customer on the tracking page)
+router.put('/on-the-way/:bookingId', async (req, res) => {
+  try {
+    const booking = await loadMyJob(req, res);
+    if (!booking) return;
+    if (booking.status !== 'Confirmed') {
+      return res.status(400).json({ success: false, message: 'Yeh abhi on-the-way mark nahi ho sakti.' });
+    }
+    if (booking.onTheWayAt) {
+      return res.status(400).json({ success: false, message: 'Aap pehle hi on the way mark kar chuke ho.' });
+    }
+    booking.onTheWayAt = new Date();
+    await booking.save();
+    res.json({ success: true, message: 'Customer ko bata diya gaya! 🚗', booking });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server Error!',
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
+    });
+  }
+});
+
+// Worker: enter the customer's START code to begin the job
+router.post('/start/:bookingId', async (req, res) => {
+  try {
+    const booking = await loadMyJob(req, res);
+    if (!booking) return;
+    if (booking.status !== 'Confirmed') {
+      return res.status(400).json({ success: false, message: 'Yeh booking abhi start nahi ho sakti.' });
+    }
+
+    const check = await checkBookingCode(res, booking, 'start', req.body.otp);
+    if (!check.ok) return;
+
+    const started = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: 'Confirmed' },
+      { status: 'In Progress', startedAt: new Date(), otpFailures: 0, otpLockedUntil: null },
+      { returnDocument: 'after' }
+    );
+    if (!started) {
+      return res.status(400).json({ success: false, message: 'Yeh booking pehle hi start ho chuki hai.' });
+    }
+    res.json({ success: true, message: 'Kaam shuru! Best of luck 💪', booking: started });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server Error!',
+      error: (process.env.NODE_ENV === 'development' ? error.message : undefined)
+    });
+  }
+});
+
+// Worker: enter the customer's END code to finish the job
+router.post('/end/:bookingId', async (req, res) => {
+  try {
+    const booking = await loadMyJob(req, res);
+    if (!booking) return;
+    if (booking.status !== 'In Progress') {
+      return res.status(400).json({ success: false, message: 'Pehle kaam start karo.' });
+    }
+
+    const check = await checkBookingCode(res, booking, 'end', req.body.otp);
+    if (!check.ok) return;
+
+    const done = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: 'In Progress' },
+      { status: 'Completed', completedAt: new Date(), otpFailures: 0, otpLockedUntil: null },
+      { returnDocument: 'after' }
+    )
+      .populate('customer', 'name phone email')
+      .populate('assignedWorker', 'name phone');
+    if (!done) {
+      return res.status(400).json({ success: false, message: 'Yeh booking pehle hi complete ho chuki hai.' });
+    }
+
+    await User.findByIdAndUpdate(req.user.id, { isAvailable: true });
+
+    if (done.customer?.email) {
+      sendBookingCompletedEmail({
+        customerName: done.customer.name,
+        customerEmail: done.customer.email,
+        workerName: done.assignedWorker?.name || 'Worker',
+        service: done.service,
+        date: done.date,
+        price: done.price,
+        bookingId: done._id
+      }).catch(err => console.log('Complete email error:', err.message));
+    }
+
+    res.json({ success: true, message: 'Kaam complete ho gaya! 🌟', booking: done });
   } catch (error) {
     res.status(500).json({
       success: false,
