@@ -470,7 +470,7 @@ function Booking() {
           )}
 
           <ul className="mt-5 space-y-2 text-xs text-slate-500">
-            <li className="flex gap-2"><Lock size={14} className="mt-0.5 shrink-0" aria-hidden="true" /> Aapka phone number worker ko nahi dikhta.</li>
+            <li className="flex gap-2"><Lock size={14} className="mt-0.5 shrink-0" aria-hidden="true" /> Aapka number worker ko tabhi dikhta hai jab aap Call karo dabate ho.</li>
             <li className="flex gap-2"><ShieldCheck size={14} className="mt-0.5 shrink-0" aria-hidden="true" /> Kaam 4-digit code se shuru aur khatam hota hai.</li>
           </ul>
         </aside>

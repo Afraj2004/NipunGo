@@ -33,7 +33,7 @@ const present = (booking, viewer) => {
   const out = { ...b };
 
   const notified = (b.pendingWorkers || []).length;
-  ['pendingWorkers', 'rejectedWorkers', 'otpFailures', 'otpLockedUntil',
+  ['pendingWorkers', 'rejectedWorkers', 'otpFailures', 'otpLockedUntil', 'contactLog',
    'razorpayOrderId', 'razorpayPaymentId', '__v'].forEach((k) => delete out[k]);
   if (isCustomer) out.workersNotified = notified;
 

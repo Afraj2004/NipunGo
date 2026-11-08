@@ -116,7 +116,9 @@ test('finishing needs the END code and completes the job', async () => {
   fireEvent.click(screen.getByText('Confirm'));
 
   await waitFor(() => expect(axios.post).toHaveBeenCalledWith('/booking/end/b1', { otp: '7305' }));
-  expect(await screen.findByText(/✅ Completed/)).toBeInTheDocument();
+  expect(await screen.findByText(/Kaam complete ho gaya/)).toBeInTheDocument();
+  // the job now waits for payment: cash can be confirmed
+  expect(screen.getByText(/cash mil gaya/)).toBeInTheDocument();
 });
 
 test('Cancel closes the dialog without calling the server', async () => {
@@ -140,10 +142,11 @@ describe('privacy and payment on the worker side', () => {
   test("a job card never shows the customer's phone or email", async () => {
     setup({ ...job, customer: { name: 'Asha R.' } });
     await openMyBookings();
-    expect(await screen.findByText('Asha R.')).toBeInTheDocument();
+    expect(await screen.findByText(/Asha R\./)).toBeInTheDocument();
+    // a Call button, but no number anywhere until it is pressed
+    expect(screen.getByRole('button', { name: /Call karo/ })).toBeInTheDocument();
     expect(document.querySelector('a[href^="tel:"]')).toBeNull();
     expect(document.body.textContent).not.toMatch(/9876543210|@example\.com/);
-    expect(screen.getByText(/Phone number privacy ke liye hidden/)).toBeInTheDocument();
   });
 
   test('a finished, unpaid job offers "cash mil gaya" and records it after confirming', async () => {

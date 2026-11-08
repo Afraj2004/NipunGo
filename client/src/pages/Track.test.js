@@ -141,9 +141,10 @@ describe('Track page', () => {
     expect(screen.getByText(/START code/)).toBeInTheDocument();
     expect(screen.queryByText(/END code/)).toBeNull();
     expect(screen.getByText('Ravi Kumar')).toBeInTheDocument();
-    expect(screen.queryByText(/Call/)).toBeNull();
+    // a Call button exists, but no number is on the page until it is pressed
+    expect(screen.getByRole('button', { name: /Call karo/ })).toBeInTheDocument();
     expect(document.querySelector('a[href^="tel:"]')).toBeNull();
-    expect(screen.getByText(/phone numbers share nahi hote/i)).toBeInTheDocument();
+    expect(screen.getByText(/jab aap "Call karo" dabate ho/i)).toBeInTheDocument();
   });
 
   test('in progress: shows the END code instead, and cancelling is no longer offered', async () => {

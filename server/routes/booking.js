@@ -13,6 +13,7 @@ const { protect, adminOnly } = require('../middleware/auth');
 const { getBookingTotal, validateSchedule } = require('../config/services');
 const { deriveOtp, verifyBookingOtp } = require('../utils/bookingOtp');
 const { present, shortName } = require('../utils/bookingView');
+const rateLimit = require('express-rate-limit');
 
 // Every booking route needs a login
 router.use(protect);
@@ -331,6 +332,67 @@ router.get('/single/:bookingId', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════
+// 📌 7b. CALL THE OTHER PERSON ("Call karo")
+//    Phone numbers are never in any list, page or email. This is the only place one is
+//    returned, and only when the caller presses "Call karo":
+//      - only the customer and the assigned worker of that booking
+//      - only while the job is active (Confirmed / In Progress), or finished but unpaid
+//      - rate limited per user, and every request is logged on the booking
+// ════════════════════════════════════════════════
+const callLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 30,
+  keyGenerator: (req) => String(req.user?.id || 'anonymous'),
+  validate: { keyGeneratorIpFallback: false },
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Bahut zyada call requests. Thodi der baad try karo.' }
+});
+
+router.get('/call/:bookingId', callLimiter, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.bookingId)
+      .populate('customer', 'name phone')
+      .populate('assignedWorker', 'name phone');
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking nahi mili!' });
+    }
+
+    const isCustomer = sameId(booking.customer, req.user.id);
+    const isWorker = sameId(booking.assignedWorker, req.user.id);
+    if (!isCustomer && !isWorker) return forbid(res);
+
+    const active = ['Confirmed', 'In Progress'].includes(booking.status);
+    const dueAfterWork = booking.status === 'Completed' && booking.paymentStatus !== 'paid';
+    if (!active && !dueAfterWork) {
+      return res.status(400).json({
+        success: false,
+        message: 'Call sirf tab ho sakta hai jab booking chal rahi ho ya payment baaki ho.'
+      });
+    }
+
+    const other = isCustomer ? booking.assignedWorker : booking.customer;
+    if (!other?.phone) {
+      return res.status(404).json({ success: false, message: 'Number available nahi hai.' });
+    }
+
+    // Keep a short audit trail on the booking (last 20 requests)
+    await Booking.updateOne(
+      { _id: booking._id },
+      { $push: { contactLog: { $each: [{ by: req.user.id, at: new Date() }], $slice: -20 } } }
+    );
+
+    res.json({
+      success: true,
+      name: isCustomer ? other.name : shortName(other.name),
+      phone: other.phone
+    });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
+// ════════════════════════════════════════════════
 // 📌 8. COMPLETE WITHOUT A CODE (support action: admin only)
 // ════════════════════════════════════════════════
 router.put('/complete/:bookingId', adminOnly, async (req, res) => {
@@ -618,7 +680,8 @@ router.put('/cash-received/:bookingId', async (req, res) => {
     }
 
     const paid = await Booking.findOneAndUpdate(
-      { _id: booking._id, status: 'Completed', paymentStatus: 'pending' },
+      // "not paid yet", not "== pending": bookings made before payments existed have no paymentStatus at all
+      { _id: booking._id, status: 'Completed', paymentStatus: { $ne: 'paid' } },
       { paymentStatus: 'paid', paidVia: 'cash', paidAt: new Date(), paidAmount: booking.price },
       { returnDocument: 'after' }
     );

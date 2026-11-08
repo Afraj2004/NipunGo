@@ -1,887 +1,311 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Plus, ClipboardList, Hourglass, CheckCircle2, Wallet, CreditCard, MapPin, ChevronRight,
+  Star, RotateCcw, XCircle, Loader2, AlertTriangle, CalendarX, Sparkles, BadgeCheck,
+} from 'lucide-react';
 import axios from '../utils/axios';
+import ServiceIcon from '../components/ServiceIcon';
+import CallButton from '../components/CallButton';
+import { StatusChip, PaymentChip, StatCard, EmptyState, Skeleton, rupees, when } from '../components/ui';
+import { getUser } from '../utils/auth';
 
-// ── Helper Functions ───────────────────────────────────────
-const getServiceIcon = (service) => {
-  const icons = {
-    'Plumber': '🔧',
-    'Electrician': '⚡',
-    'Carpenter': '🪚',
-    'Painter': '🎨',
-    'AC Mechanic': '❄️',
-    'Cleaner': '🧹',
-    'Locksmith': '🔒',
-    'Gardener': '🌿',
-    'IT Support': '🖥️',
-    'Laundry': '🧺',
-    'Pest Control': '🐛',
-  };
-  return icons[service] || '🔧';
-};
+const ACTIVE = ['Searching', 'Confirmed', 'In Progress'];
+const POLL_MS = 15000;
 
+const TABS = [
+  { id: 'all', label: 'Sabhi', match: () => true },
+  { id: 'active', label: 'Active', match: (b) => ACTIVE.includes(b.status) },
+  { id: 'completed', label: 'Completed', match: (b) => b.status === 'Completed' },
+  { id: 'cancelled', label: 'Cancelled', match: (b) => ['Cancelled', 'No Workers'].includes(b.status) },
+];
 
-const getStatusColor = (status) => {
-  const colors = {
-    'Searching': 'bg-orange-100 text-orange-600 border border-orange-200',
-    'Confirmed': 'bg-blue-100 text-blue-600 border border-blue-200',
-    'In Progress': 'bg-purple-100 text-purple-600 border border-purple-200',
-    'Completed': 'bg-green-100 text-green-600 border border-green-200',
-    'Cancelled': 'bg-red-100 text-red-600 border border-red-200',
-    'No Workers': 'bg-gray-100 text-gray-600 border border-gray-200',
-  };
-  return colors[status] || 'bg-gray-100 text-gray-600';
-};
+const canCallFor = (b) =>
+  ['Confirmed', 'In Progress'].includes(b.status) || (b.status === 'Completed' && b.paymentStatus !== 'paid');
 
-const getStatusIcon = (status) => {
-  const icons = {
-    'Searching': '🔍',
-    'Confirmed': '✅',
-    'In Progress': '🛠️',
-    'Completed': '🎉',
-    'Cancelled': '❌',
-    'No Workers': '😔',
-  };
-  return icons[status] || '❓';
-};
-
-// ── Worker Detail Card (Confirmed booking mein dikhega) ────
-function WorkerDetailCard({ worker }) {
-  if (!worker) return null;
+function BookingCard({ booking, onOpen, onCancel, cancelling, navigate }) {
+  const b = booking;
+  const worker = b.assignedWorker;
+  const unpaid = b.status === 'Completed' && b.paymentStatus !== 'paid';
+  const cancellable = ['Searching', 'Confirmed'].includes(b.status) && b.paymentStatus !== 'paid';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: 'auto' }}
-      className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl
-        p-4 mt-3 border border-indigo-100"
-    >
-      <p className="text-xs font-medium text-indigo-400 uppercase
-        tracking-wider mb-3">
-        👷 Assigned Worker
-      </p>
-
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-12 h-12 bg-primary rounded-xl flex items-center
-          justify-center text-white font-bold text-lg flex-shrink-0">
-          {worker.name?.charAt(0).toUpperCase()}
-        </div>
-        <div>
-          <p className="font-bold text-gray-800">{worker.name}</p>
-          <p className="text-gray-500 text-sm">{worker.service}</p>
-          {worker.rating > 0 && (
-            <div className="flex items-center gap-1 text-sm">
-              <span className="text-yellow-400">⭐</span>
-              <span className="text-gray-600 font-medium">
-                {worker.rating.toFixed(1)}
-              </span>
-            </div>
+    <li className="card overflow-hidden">
+      <button
+        type="button"
+        onClick={() => onOpen(b._id)}
+        className="flex w-full items-start gap-4 p-4 text-left transition hover:bg-slate-50 sm:p-5"
+        aria-label={`${b.service} booking, ${b.status}. Open details`}
+      >
+        <ServiceIcon service={b.service} size={52} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900">{b.service}</h3>
+            <StatusChip status={b.status} />
+            <PaymentChip booking={b} />
+          </div>
+          <p className="mt-1 text-sm text-slate-500">{when(b.date, b.time)}</p>
+          <p className="mt-0.5 flex items-start gap-1 text-sm text-slate-500">
+            <MapPin size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <span className="line-clamp-1 break-words">{b.address}</span>
+          </p>
+          {worker && (
+            <p className="mt-1 flex items-center gap-1 text-sm text-slate-600">
+              <BadgeCheck size={14} className="shrink-0 text-primary" aria-hidden="true" />
+              {worker.name}
+              {worker.rating > 0 && (
+                <span className="inline-flex items-center gap-0.5 text-amber-600">
+                  <Star size={12} fill="currentColor" aria-hidden="true" /> {Number(worker.rating).toFixed(1)}
+                </span>
+              )}
+            </p>
+          )}
+          {b.status === 'Searching' && b.workersNotified > 0 && (
+            <p className="mt-1 text-xs text-amber-700">{b.workersNotified} workers ko request bheji gayi hai</p>
           )}
         </div>
-      </div>
+        <div className="shrink-0 text-right">
+          <p className="text-lg font-extrabold text-slate-900">{rupees(b.price)}</p>
+          <ChevronRight size={18} className="ml-auto mt-2 text-slate-300" aria-hidden="true" />
+        </div>
+      </button>
 
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex items-center gap-2 bg-white rounded-xl p-3">
-          <span className="text-lg">🔒</span>
-          <div>
-            <p className="text-gray-400 text-xs">Privacy</p>
-            <p className="font-medium text-gray-700 text-sm">Phone share nahi hota</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 bg-white rounded-xl p-3">
-          <span className="text-lg">📍</span>
-          <div>
-            <p className="text-gray-400 text-xs">City</p>
-            <p className="font-medium text-gray-700 text-sm">
-              {worker.city || 'N/A'}
-            </p>
-          </div>
-        </div>
-        {worker.experience && (
-          <div className="flex items-center gap-2 bg-white rounded-xl
-            p-3 col-span-2">
-            <span className="text-lg">🏆</span>
-            <div>
-              <p className="text-gray-400 text-xs">Experience</p>
-              <p className="font-medium text-gray-700 text-sm">
-                {worker.experience}
-              </p>
-            </div>
-          </div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3 sm:px-5">
+        {unpaid && (
+          <button type="button" className="btn-secondary !min-h-[40px] !py-2" onClick={() => onOpen(b._id)}>
+            <CreditCard size={16} aria-hidden="true" /> Payment karo
+          </button>
+        )}
+        {ACTIVE.includes(b.status) && (
+          <button type="button" className="btn-primary !min-h-[40px] !py-2" onClick={() => onOpen(b._id)}>
+            Track karo
+          </button>
+        )}
+        {canCallFor(b) && <CallButton bookingId={b._id} className="[&_.btn]:!min-h-[40px] [&_.btn]:!py-2" />}
+        {b.status === 'Completed' && (
+          <button type="button" className="btn-outline !min-h-[40px] !py-2" onClick={() => navigate(`/review/${b._id}`)}>
+            <Star size={16} aria-hidden="true" /> Review do
+          </button>
+        )}
+        {['Completed', 'Cancelled', 'No Workers'].includes(b.status) && (
+          <button
+            type="button"
+            className="btn-outline !min-h-[40px] !py-2"
+            onClick={() => navigate(`/booking/${encodeURIComponent(b.service)}`)}
+          >
+            <RotateCcw size={16} aria-hidden="true" /> Dobara book karo
+          </button>
+        )}
+        {cancellable && (
+          <button
+            type="button"
+            className="btn-danger !min-h-[40px] !py-2 sm:ml-auto"
+            onClick={() => onCancel(b)}
+            disabled={cancelling === b._id}
+          >
+            {cancelling === b._id ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : <XCircle size={16} aria-hidden="true" />}
+            Cancel
+          </button>
         )}
       </div>
-    </motion.div>
+    </li>
   );
 }
 
-// ── Searching Status Card ──────────────────────────────────
-function SearchingCard({ booking, onCancel }) {
-  const [dots, setDots] = useState('');
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDots(prev => prev.length >= 3 ? '' : prev + '.');
-    }, 500);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="bg-orange-50 rounded-xl p-4 mt-3 border border-orange-100">
-      <div className="flex items-center gap-3 mb-3">
-        {/* Animated search icon */}
-        <div className="relative w-10 h-10 flex-shrink-0">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
-            className="absolute inset-0 rounded-full border-2 border-dashed
-              border-orange-300"
-          />
-          <div className="absolute inset-1 bg-orange-100 rounded-full
-            flex items-center justify-center text-sm">
-            🔍
-          </div>
-        </div>
-        <div>
-          <p className="font-bold text-orange-700 text-sm">
-            Worker Dhundh Rahe Hain{dots}
-          </p>
-          <p className="text-orange-500 text-xs">
-            Yeh page auto-update hoga
-          </p>
-        </div>
-      </div>
-
-      {/* Workers notified count */}
-      {booking.workersNotified > 0 && (
-        <div className="flex items-center gap-2 bg-white rounded-xl p-3 mb-3">
-          <span className="text-lg">🔔</span>
-          <p className="text-gray-600 text-sm">
-            <span className="font-bold text-primary">
-              {booking.workersNotified}
-            </span>{' '}
-            workers ko request bheji gayi hai
-          </p>
-        </div>
-      )}
-
-      <button
-        onClick={onCancel}
-        className="w-full border border-red-200 text-red-400 py-2 rounded-xl
-          text-sm font-medium hover:bg-red-50 transition"
-      >
-        Cancel Request
-      </button>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════
-// MAIN DASHBOARD COMPONENT
-// ══════════════════════════════════════════════════════════
 function Dashboard() {
   const navigate = useNavigate();
+  const user = getUser();
 
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('all');
-  const [cancellingId, setCancellingId] = useState('');
+  const [bookings, setBookings] = useState(null); // null = loading
+  const [error, setError] = useState('');
+  const [tab, setTab] = useState('all');
+  const [cancelling, setCancelling] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
 
-  // Polling ref
-  const pollingRef = useRef(null);
-
-  // ── Fetch All Bookings ────────────────────────────────
-// 👇 useCallback mein wrap karo
-const fetchMyBookings = useCallback(async (userId, token) => {
-  try {
-    const response = await axios.get(
-      `/booking/my-bookings/${userId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (response.data.success) {
-      setBookings(response.data.bookings);
+  const load = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await axios.get(`/booking/my-bookings/${user.id}`);
+      setBookings(res.data.bookings || []);
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Bookings load nahi ho payi. Internet check karo.');
+      setBookings((prev) => prev || []);
     }
-  } catch (error) {
-    console.log('Fetch error:', error);
-  } finally {
-    setLoading(false);
-  }
-}, []); // ← empty array — function kabhi change nahi hoga
-// ── Poll Only Searching Bookings ──────────────────────
-const pollSearchingBookings = useCallback(async (userId, token) => {
-  try {
-    const response = await axios.get(
-      `/booking/my-bookings/${userId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
-    if (response.data.success) {
-      const freshBookings = response.data.bookings;
+  useEffect(() => { load(); }, [load]);
 
-      setBookings(prev => {
-        const hasChange = prev.some(oldBooking => {
-          const freshMatch = freshBookings.find(
-            fb => fb._id === oldBooking._id
-          );
-          return freshMatch && freshMatch.status !== oldBooking.status;
-        });
+  // Keep the list fresh while something is still moving (a worker accepting, a job starting...)
+  const hasActive = useMemo(() => (bookings || []).some((b) => ACTIVE.includes(b.status)), [bookings]);
+  useEffect(() => {
+    if (!hasActive) return undefined;
+    const t = setInterval(load, POLL_MS);
+    return () => clearInterval(t);
+  }, [hasActive, load]);
 
-        return hasChange ? freshBookings : prev;
-      });
-    }
-  } catch (err) {
-    console.log('Polling error:', err);
-  }
-}, []); // ← empty array
+  useEffect(() => {
+    axios.get('/recommendations/suggested')
+      .then((res) => setSuggestions(res.data.recommendations || []))
+      .catch(() => {});
+  }, []);
 
-// ── Auth Check ────────────────────────────────────────
-useEffect(() => {
-  const savedUser = localStorage.getItem('user');
-  const token = localStorage.getItem('token');
-
-  if (!savedUser || !token) {
-    navigate('/login');
-    return;
-  }
-
-  const parsedUser = JSON.parse(savedUser);
-
-  if (parsedUser.role === 'worker') {
-    navigate('/worker/dashboard');
-    return;
-  }
-
-  setUser(parsedUser);
-  fetchMyBookings(parsedUser.id, token);
-
-  pollingRef.current = setInterval(() => {
-    const tkn = localStorage.getItem('token');
-    const usr = localStorage.getItem('user');
-    if (usr && tkn) {
-      const u = JSON.parse(usr);
-      pollSearchingBookings(u.id, tkn);
-    }
-  }, 8000);
-
-  return () => {
-    if (pollingRef.current) clearInterval(pollingRef.current);
-  };
-  // 👇 Dependencies mein add karo
-}, [navigate, fetchMyBookings, pollSearchingBookings]);
-
-  // ── Cancel Booking ────────────────────────────────────
-  const handleCancel = async (bookingId) => {
+  const cancel = async (b) => {
     if (!window.confirm('Booking cancel karna chahte ho?')) return;
-
-    setCancellingId(bookingId);
+    setCancelling(b._id);
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.put(
-        `/booking/cancel/${bookingId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (response.data.success) {
-        setBookings(prev => prev.map(b =>
-          b._id === bookingId ? { ...b, status: 'Cancelled' } : b
-        ));
-      }
-    } catch {
-      alert('Booking cancel nahi ho saki!');
+      await axios.put(`/booking/cancel/${b._id}`, {});
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Cancel nahi ho saki.');
     } finally {
-      setCancellingId('');
+      setCancelling('');
     }
   };
-// Inside Dashboard component...
-const [suggestions, setSuggestions] = useState([]);
 
-useEffect(() => {
-  const fetchSuggestions = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('/recommendations/suggested', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setSuggestions(res.data.recommendations);
-    } catch (err) { console.log(err); }
-  };
-  fetchSuggestions();
-}, []);
-
-  // ── Stats ─────────────────────────────────────────────
+  const list = bookings || [];
   const stats = {
-    total: bookings.length,
-    searching: bookings.filter(b => b.status === 'Searching').length,
-    confirmed: bookings.filter(b => b.status === 'Confirmed' || b.status === 'In Progress').length,
-    completed: bookings.filter(b => b.status === 'Completed').length,
-    cancelled: bookings.filter(b => b.status === 'Cancelled').length,
-    totalSpent: bookings
-      .filter(b => b.status === 'Completed')
-      .reduce((sum, b) => sum + (b.price || 0), 0)
+    total: list.length,
+    active: list.filter((b) => ACTIVE.includes(b.status)).length,
+    completed: list.filter((b) => b.status === 'Completed').length,
+    spent: list.filter((b) => b.paymentStatus === 'paid').reduce((s, b) => s + (b.paidAmount || b.price || 0), 0),
   };
+  const due = list.filter((b) => b.status === 'Completed' && b.paymentStatus !== 'paid');
+  const dueTotal = due.reduce((s, b) => s + (b.price || 0), 0);
 
-  // ── Filter Bookings ───────────────────────────────────
-  const filteredBookings = bookings.filter(booking => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'searching') return booking.status === 'Searching';
-    if (activeTab === 'confirmed') return ['Confirmed', 'In Progress'].includes(booking.status);
-    return booking.status.toLowerCase() === activeTab;
-  });
+  const shown = list.filter((TABS.find((t) => t.id === tab) || TABS[0]).match);
+  const firstName = (user?.name || '').split(' ')[0];
 
-  const tabs = [
-    { id: 'all', label: 'Sabhi', count: stats.total },
-    {
-      id: 'searching',
-      label: '🔍 Searching',
-      count: stats.searching,
-      pulse: stats.searching > 0
-    },
-    { id: 'confirmed', label: 'Confirmed', count: stats.confirmed },
-    { id: 'completed', label: 'Completed', count: stats.completed },
-    { id: 'cancelled', label: 'Cancelled', count: stats.cancelled },
-  ];
-
-  // ── Loading ───────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 1 }}
-            className="text-5xl mb-4"
-          >
-            ⏳
-          </motion.div>
-          <p className="text-gray-500 font-medium">
-            Aapki bookings load ho rahi hain...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  
-
-  // ── Main Render ───────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50">
-
-      {/* ===== HEADER ===== */}
-      <section className="bg-gradient-to-br from-indigo-900 via-primary
-        to-indigo-700 pt-10 pb-24 px-4 relative overflow-hidden">
-
-        <div className="absolute top-0 left-0 w-64 h-64 bg-white
-          opacity-5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-secondary
-          opacity-10 rounded-full blur-3xl" />
-
-        <div className="max-w-5xl mx-auto relative z-10">
-
-          {/* User Info */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-4 mb-8"
-          >
-            <div className="w-16 h-16 bg-white bg-opacity-20 rounded-2xl
-              flex items-center justify-center text-white font-bold text-2xl
-              backdrop-blur-sm border border-white border-opacity-30">
-              {user?.name.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <p className="text-indigo-300 text-sm">Welcome back! 👋</p>
-              <h1 className="text-2xl font-bold text-white">{user?.name}</h1>
-              <p className="text-indigo-300 text-sm">{user?.email}</p>
-            </div>
-          </motion.div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              {
-                label: "Total Bookings",
-                value: stats.total,
-                icon: "📋"
-              },
-              {
-                label: "Searching",
-                value: stats.searching,
-                icon: "🔍",
-                pulse: stats.searching > 0
-              },
-              {
-                label: "Confirmed",
-                value: stats.confirmed,
-                icon: "✅"
-              },
-              {
-                label: "Total Spent",
-                value: `₹${stats.totalSpent}`,
-                icon: "💰"
-              },
-            ].map((stat, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 * index }}
-                whileHover={{ y: -3 }}
-                className="bg-white bg-opacity-20 backdrop-blur-sm rounded-2xl
-                  p-4 border border-white border-opacity-20"
-              >
-                <div className={`text-2xl mb-2 ${
-                  stat.pulse ? 'animate-pulse' : ''
-                }`}>
-                  {stat.icon}
-                </div>
-                <h3 className="text-2xl font-bold text-white">
-                  {stat.value}
-                </h3>
-                <p className="text-indigo-300 text-sm">{stat.label}</p>
-              </motion.div>
-            ))}
+    <div className="pb-10">
+      {/* Header */}
+      <section className="bg-gradient-to-br from-indigo-900 via-primary to-indigo-700 px-4 pb-20 pt-8 text-white">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm text-white/70">Welcome back</p>
+            <h1 className="truncate text-2xl font-extrabold tracking-tight sm:text-3xl">Namaste, {firstName || 'there'}</h1>
           </div>
+          <button type="button" onClick={() => navigate('/services')} className="btn bg-white text-primary shadow-card hover:bg-primary-50">
+            <Plus size={18} aria-hidden="true" /> Nayi booking
+          </button>
         </div>
       </section>
 
-      {/* ===== MAIN CONTENT ===== */}
-      <section className="max-w-5xl mx-auto px-4 -mt-12 pb-12 relative z-10">
+      <div className="relative z-10 mx-auto -mt-12 max-w-5xl space-y-6 px-4">
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard icon={ClipboardList} label="Total bookings" value={bookings === null ? '–' : stats.total} />
+          <StatCard icon={Hourglass} label="Active" value={bookings === null ? '–' : stats.active} tone="amber" />
+          <StatCard icon={CheckCircle2} label="Completed" value={bookings === null ? '–' : stats.completed} tone="green" />
+          <StatCard icon={Wallet} label="Total paid" value={bookings === null ? '–' : rupees(stats.spent)} tone="orange" />
+        </div>
 
-        {/* Searching Alert */}
-        <AnimatePresence>
-          {stats.searching > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-orange-50 border-2 border-orange-200 rounded-2xl
-                p-4 mb-6 flex items-center gap-3"
-            >
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
-                className="text-2xl"
-              >
-                🔍
-              </motion.div>
+        {error && (
+          <div role="alert" className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden="true" /> {error}
+          </div>
+        )}
+
+        {/* Money owed comes first */}
+        {due.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-secondary/40 bg-secondary-50 p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <CreditCard className="mt-0.5 shrink-0 text-secondary-600" size={22} aria-hidden="true" />
               <div>
-                <p className="font-bold text-orange-700">
-                  {stats.searching} booking{stats.searching > 1 ? 'en' : ''}
-                  {' '}worker dhundh rahi hai!
+                <p className="font-bold text-slate-900">
+                  {due.length === 1 ? 'Ek booking ka payment baaki hai' : `${due.length} bookings ka payment baaki hai`}
                 </p>
-                <p className="text-orange-500 text-sm">
-                  Jaise hi worker accept kare, aapko yahan dikh jayega ✅
-                </p>
+                <p className="text-sm text-slate-600">Kul {rupees(dueTotal)}. Online pay karo ya cash worker ko do.</p>
               </div>
-              <button
-                onClick={() => setActiveTab('searching')}
-                className="ml-auto bg-orange-400 text-white px-4 py-2
-                  rounded-xl text-sm font-bold hover:bg-orange-500 transition
-                  whitespace-nowrap"
-              >
-                Dekho →
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-<div className="mb-8">
-  <h2 className="text-gray-800 text-lg font-bold mb-3 flex items-center gap-2">
-    ✨ Suggested for Your Home
-  </h2>
-  <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
-    {suggestions.map((item, idx) => (
-      <motion.div
-        key={idx}
-        whileHover={{ scale: 1.05 }}
-        onClick={() => navigate(`/booking/${encodeURIComponent(item)}`)}
-        className="flex-shrink-0 bg-white p-4 rounded-2xl shadow-md
-                   min-w-[140px] cursor-pointer text-center"
-      >
-        <span className="text-3xl block mb-2">{getServiceIcon(item)}</span>
-        <span className="text-gray-800 font-semibold text-sm">{item}</span>
-      </motion.div>
-    ))}
-  </div>
-</div>
-        {/* Quick Actions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"
-        >
-          {[
-            {
-              label: "New Booking",
-              icon: "🔧",
-              color: "bg-primary",
-              action: () => navigate('/services')
-            },
-            {
-              label: "Services",
-              icon: "⚡",
-              color: "bg-secondary",
-              action: () => navigate('/services')
-            },
-            {
-              label: "Home",
-              icon: "🏠",
-              color: "bg-slate-700",
-              action: () => navigate('/')
-            },
-            {
-              label: "Refresh",
-              icon: "🔄",
-              color: "bg-slate-500",
-              action: () => {
-                setLoading(true);
-                const token = localStorage.getItem('token');
-                fetchMyBookings(user.id, token);
-              }
-            },
-          ].map((action, index) => (
-            <motion.button
-              key={index}
-              whileHover={{ y: -3, scale: 1.02 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={action.action}
-              className={`${action.color} text-white p-4 rounded-2xl
-                font-medium shadow-lg flex items-center gap-2
-                justify-center text-sm`}
-            >
-              <span className="text-xl">{action.icon}</span>
-              <span>{action.label}</span>
-            </motion.button>
-          ))}
-        </motion.div>
-
-
-{/* Bookings Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white rounded-2xl shadow-lg overflow-hidden"
-        >
-
-          {/* Header */}
-          <div className="p-6 border-b border-gray-100">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                Meri Bookings
-              </h2>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/services')}
-                className="bg-primary text-white px-4 py-2 rounded-xl
-                  text-sm font-medium flex items-center gap-2"
-              >
-                + New Booking
-              </motion.button>
             </div>
+            <button type="button" onClick={() => navigate(`/track/${due[0]._id}`)} className="btn-secondary">
+              Payment karo
+            </button>
+          </div>
+        )}
 
-            {/* Tabs */}
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {tabs.map((tab) => (
+        {/* Quick rebook */}
+        {suggestions.length > 0 && (
+          <section aria-label="Suggested services">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-slate-500">
+              <Sparkles size={15} aria-hidden="true" /> Aapke liye
+            </h2>
+            <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+              {suggestions.map((s) => (
                 <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`relative flex items-center gap-2 px-4 py-2
-                    rounded-xl text-sm font-medium whitespace-nowrap
-                    transition ${
-                    activeTab === tab.id
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-indigo-50'
+                  key={s}
+                  type="button"
+                  onClick={() => navigate(`/booking/${encodeURIComponent(s)}`)}
+                  className="card flex shrink-0 items-center gap-3 px-4 py-3 transition hover:shadow-lift"
+                >
+                  <ServiceIcon service={s} size={36} />
+                  <span className="text-sm font-semibold text-slate-800">{s}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Bookings */}
+        <section aria-label="My bookings">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-extrabold text-slate-900">Meri bookings</h2>
+            <div role="tablist" aria-label="Filter bookings" className="flex w-full gap-1 overflow-x-auto rounded-xl bg-slate-200/60 p-1 sm:w-auto">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  role="tab"
+                  type="button"
+                  aria-selected={tab === t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`min-h-[36px] shrink-0 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition ${
+                    tab === t.id ? 'bg-white text-primary shadow-card' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  {tab.label}
-                  <span className={`px-2 py-0.5 rounded-full text-xs ${
-                    activeTab === tab.id
-                      ? 'bg-white bg-opacity-30 text-white'
-                      : 'bg-gray-200 text-gray-600'
-                  }`}>
-                    {tab.count}
-                  </span>
-                  {/* Pulse dot for searching */}
-                  {tab.pulse && (
-                    <span className="absolute -top-1 -right-1 w-3 h-3
-                      bg-orange-400 rounded-full animate-ping" />
-                  )}
+                  {t.label}
+                  <span className="ml-1.5 text-xs opacity-60">{list.filter(t.match).length}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Bookings List */}
-          <div className="p-6">
-            <AnimatePresence mode="wait">
-              {filteredBookings.length === 0 ? (
-                <motion.div
-                  key="empty"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-16"
-                >
-                  <div className="text-6xl mb-4">📭</div>
-                  <h3 className="text-gray-600 text-xl font-medium mb-2">
-                    Koi booking nahi hai!
-                  </h3>
-                  <p className="text-gray-400 mb-6">
-                    Abhi pehli booking karo
-                  </p>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => navigate('/services')}
-                    className="bg-primary text-white px-6 py-3
-                      rounded-xl font-bold"
-                  >
-                    Services Dekho 🔧
-                  </motion.button>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="list"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex flex-col gap-4"
-                >
-                  {filteredBookings.map((booking, index) => (
-                    <motion.div
-                      key={booking._id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className={`border rounded-2xl p-5 transition-all
-                        hover:shadow-md ${
-                        booking.status === 'Searching'
-                          ? 'border-orange-200 bg-orange-50'
-                          : booking.status === 'Confirmed'
-                          ? 'border-blue-100 bg-blue-50'
-                          : 'border-gray-100 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-start gap-4">
-
-                        {/* Service Icon */}
-                        <div className="w-14 h-14 bg-white rounded-2xl
-                          flex items-center justify-center text-2xl
-                          flex-shrink-0 shadow-sm border border-gray-100">
-                          {getServiceIcon(booking.service)}
-                        </div>
-
-                        {/* Booking Info */}
-                        <div className="flex-1 min-w-0">
-
-                          {/* Title + Status */}
-                          <div className="flex items-center justify-between
-                            flex-wrap gap-2 mb-3">
-                            <h3 className="font-bold text-gray-800 text-lg">
-                              {booking.service}
-                            </h3>
-                            <span className={`px-3 py-1 rounded-full text-xs
-                              font-medium ${getStatusColor(booking.status)}`}>
-                              {getStatusIcon(booking.status)} {booking.status}
-                            </span>
-                            {booking.status === 'Completed' && (
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                booking.paymentStatus === 'paid'
-                                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                                  : 'bg-orange-100 text-orange-700 border border-orange-200'
-                              }`}>
-                                {booking.paymentStatus === 'paid' ? '✓ Paid' : '₹ Payment baaki'}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Booking Details Grid */}
-                          <div className="grid grid-cols-2 gap-2 mb-3">
-                            <div className="flex items-center gap-2
-                              text-gray-500 text-sm">
-                              <span>📅</span>
-                              <span>{booking.date}</span>
-                            </div>
-                            <div className="flex items-center gap-2
-                              text-gray-500 text-sm">
-                              <span>⏰</span>
-                              <span>{booking.time}</span>
-                            </div>
-                            <div className="flex items-center gap-2
-                              text-gray-500 text-sm col-span-2">
-                              <span>📍</span>
-                              <span className="truncate">
-                                {booking.address}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2
-                              text-gray-500 text-sm col-span-2">
-                              <span>🆔</span>
-                              <span className="text-xs text-gray-400">
-                                #{booking._id.slice(-8).toUpperCase()}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* ── SEARCHING: Worker dhundh raha hai ── */}
-                          {booking.status === 'Searching' && (
-                            <SearchingCard
-                              booking={booking}
-                              onCancel={() => handleCancel(booking._id)}
-                            />
-                          )}
-
-                          {/* ── CONFIRMED: Worker details dikho ── */}
-                          {['Confirmed', 'In Progress'].includes(booking.status) &&
-                            booking.assignedWorker && (
-                            <WorkerDetailCard
-                              worker={booking.assignedWorker}
-                            />
-                          )}
-
-                          {/* ── NO WORKERS ── */}
-                          {booking.status === 'No Workers' && (
-                            <div className="bg-gray-50 rounded-xl p-3 mt-3
-                              flex items-center gap-3">
-                              <span className="text-2xl">😔</span>
-                              <div>
-                                <p className="font-medium text-gray-700 text-sm">
-                                  Koi worker available nahi tha
-                                </p>
-                                <button
-                                  onClick={() => navigate('/services')}
-                                  className="text-primary text-xs
-                                    font-medium hover:underline"
-                                >
-                                  Dobara try karo →
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Price + Actions */}
-                          <div className="flex items-center justify-between
-                            flex-wrap gap-2 mt-4">
-                            <span className="text-secondary font-bold text-lg">
-                              ₹{booking.price}
-                            </span>
-
-                            <div className="flex gap-2 flex-wrap">
-                              {/* Live tracking + codes */}
-                              {['Searching', 'Confirmed', 'In Progress'].includes(booking.status) && (
-                                <motion.button
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={() => navigate(`/track/${booking._id}`)}
-                                  className="bg-indigo-50 text-primary border
-                                    border-indigo-200 px-3 py-1.5 rounded-xl
-                                    text-sm font-medium hover:bg-indigo-100
-                                    transition"
-                                >
-                                  📍 Track
-                                </motion.button>
-                              )}
-
-                              {/* Cancel — until the work has started */}
-                              {['Searching', 'Confirmed'].includes(booking.status) && (
-                                <motion.button
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={() => handleCancel(booking._id)}
-                                  disabled={cancellingId === booking._id}
-                                  className="bg-red-50 text-red-500 border
-                                    border-red-200 px-3 py-1.5 rounded-xl
-                                    text-sm font-medium hover:bg-red-100
-                                    transition disabled:opacity-60"
-                                >
-                                  {cancellingId === booking._id
-                                    ? '⏳'
-                                    : '❌ Cancel'
-                                  }
-                                </motion.button>
-                              )}
-
-                              {/* Review — Completed ke liye */}
-                              {booking.status === 'Completed' && (
-                                <motion.button
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={() =>
-                                    navigate(`/review/${booking._id}`)
-                                  }
-                                  className="bg-yellow-50 text-yellow-600
-                                    border border-yellow-200 px-3 py-1.5
-                                    rounded-xl text-sm font-medium
-                                    hover:bg-yellow-100 transition"
-                                >
-                                  ⭐ Review Do
-                                </motion.button>
-                              )}
-
-                              {/* Book Again */}
-                              {['Completed', 'Cancelled', 'No Workers']
-                                .includes(booking.status) && (
-                                <motion.button
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={() => navigate('/services')}
-                                  className="bg-indigo-50 text-primary
-                                    border border-indigo-200 px-3 py-1.5
-                                    rounded-xl text-sm font-medium
-                                    hover:bg-indigo-100 transition"
-                                >
-                                  🔄 Book Again
-                                </motion.button>
-                              )}
-                            </div>
-                          </div>
-
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-        </motion.div>
-
-        {/* First Booking CTA */}
-        {bookings.length === 0 && !loading && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-6 bg-gradient-to-r from-primary to-indigo-800
-              rounded-2xl p-8 text-center text-white"
-          >
-            <div className="text-5xl mb-4">🚀</div>
-            <h3 className="text-2xl font-bold mb-2">
-              Pehli Booking Karo!
-            </h3>
-            <p className="text-indigo-200 mb-6">
-              Hazaro verified experts tayar hain aapki help ke liye!
-            </p>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate('/services')}
-              className="bg-white text-primary px-8 py-3 rounded-full
-                font-bold hover:bg-gray-100 transition"
-            >
-              Services Dekho →
-            </motion.button>
-          </motion.div>
-        )}
-
-      </section>
+          {bookings === null ? (
+            <div className="space-y-3">
+              <Skeleton className="h-32" /><Skeleton className="h-32" />
+            </div>
+          ) : shown.length === 0 ? (
+            <div className="card">
+              <EmptyState
+                icon={CalendarX}
+                title={tab === 'all' ? 'Abhi koi booking nahi hai' : 'Is filter mein kuch nahi'}
+                text={tab === 'all' ? 'Apni pehli service book karo. Plumber, electrician, cleaner aur bahut kuch.' : 'Dusra filter try karo.'}
+              >
+                {tab === 'all' && (
+                  <button type="button" className="btn-primary" onClick={() => navigate('/services')}>
+                    <Plus size={18} aria-hidden="true" /> Service chuno
+                  </button>
+                )}
+              </EmptyState>
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {shown.map((b) => (
+                <BookingCard
+                  key={b._id}
+                  booking={b}
+                  onOpen={(id) => navigate(`/track/${id}`)}
+                  onCancel={cancel}
+                  cancelling={cancelling}
+                  navigate={navigate}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
   );
-  
 }
-
 
 export default Dashboard;

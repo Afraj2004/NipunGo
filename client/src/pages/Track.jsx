@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import axios from '../utils/axios';
 import ServiceIcon from '../components/ServiceIcon';
+import CallButton from '../components/CallButton';
 import { getUser } from '../utils/auth';
 import { payForBooking } from '../utils/payment';
 
@@ -352,9 +353,13 @@ function Track() {
               </p>
             </div>
           </div>
+          {(['Confirmed', 'In Progress'].includes(booking.status) ||
+            (booking.status === 'Completed' && booking.paymentStatus !== 'paid')) && (
+            <CallButton bookingId={booking._id} className="mt-4" />
+          )}
           <p className="mt-4 flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
             <Lock size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-            Aapki privacy ke liye phone numbers share nahi hote. Kaam ka sab update yahin milega.
+            Aapka number worker ko tabhi dikhta hai jab aap "Call karo" dabate ho, aur sirf is booking ke dauran.
           </p>
         </section>
       )}

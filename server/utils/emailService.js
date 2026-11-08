@@ -417,8 +417,8 @@ const sendWorkerAssignedEmail = async (params) => {
       ` : ''}
       <div class="divider"></div>
       <div style="text-align: center; padding: 8px 0; color: #6b7280; font-size: 13px; line-height: 1.6;">
-        🔒 Privacy ke liye phone numbers share nahi kiye jaate.<br>
-        Booking ka live status aur <strong>START code</strong> tracking page par dekho.
+        🔒 Privacy ke liye phone number email mein nahi diya jaata.<br>
+        Call karna ho to tracking page par <strong>Call karo</strong> dabao. Wahin <strong>START code</strong> bhi milega.
       </div>
     </div>
 

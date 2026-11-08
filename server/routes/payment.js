@@ -65,7 +65,7 @@ router.post('/create-order', async (req, res) => {
     console.error('Payment order error:', error?.error?.description || error.message);
     res.status(500).json({
       success: false,
-      message: 'Payment shuru nahi ho paya. Thodi der baad try karo.',
+      message: 'Online payment abhi available nahi hai. Aap cash se pay kar sakte ho, ya thodi der baad try karo.',
       ...(isDev ? { error: error.message } : {})
     });
   }
@@ -92,7 +92,7 @@ router.post('/verify', async (req, res) => {
 
     // Idempotent: a repeated call (double click, retry) records it once
     const paid = await Booking.findOneAndUpdate(
-      { _id: booking._id, paymentStatus: 'pending' },
+      { _id: booking._id, paymentStatus: { $ne: 'paid' } }, // also matches older bookings with no field
       {
         paymentStatus: 'paid',
         paidVia: 'online',

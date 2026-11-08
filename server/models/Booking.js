@@ -92,6 +92,9 @@ const bookingSchema = new mongoose.Schema({
   razorpayOrderId: { type: String, default: null },
   razorpayPaymentId: { type: String, default: null },
 
+  // Who asked to see the other person's number, and when (internal audit trail)
+  contactLog: [{ by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, at: { type: Date, default: Date.now } }],
+
   // Guessing protection for the 4-digit start/end codes
   otpFailures: { type: Number, default: 0 },
   otpLockedUntil: { type: Date, default: null },

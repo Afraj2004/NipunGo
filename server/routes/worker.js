@@ -185,16 +185,27 @@ router.put('/update/:workerId', protect, selfOrAdmin, async (req, res) => {
       });
     }
 
+    // Free-text fields must be text and are kept to a sensible length
+    const text = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : null);
+    const fields = { city: text(city, 50), experience: text(experience, 40), about: text(about, 500) };
+    for (const [name, value] of Object.entries(fields)) {
+      const given = { city, experience, about }[name];
+      if (given !== undefined && value === null) {
+        return res.status(400).json({ success: false, message: `${name} sahi format mein likho!` });
+      }
+    }
+
+    const update = { service };
+    if (fields.city !== null) update.city = fields.city;
+    if (fields.experience !== null) update.experience = fields.experience;
+    if (fields.about !== null) update.about = fields.about;
+    // The stored price is only changed when one is actually sent (the dashboard doesn't send it)
+    if (price !== undefined && price !== '') update.price = Number(price);
+
     const worker = await User.findByIdAndUpdate(
       req.params.workerId,
-      {
-        service:    service.trim(),
-        city:       city?.trim()        || '',
-        price:      Number(price)       || 0,
-        experience: experience?.trim()  || '',
-        about:      about?.trim()       || '',
-      },
-      { new: true }
+      update,
+      { returnDocument: 'after' }
     ).select('-password');
 
     if (!worker) {
