@@ -250,27 +250,17 @@ function WorkerProfile() {
               </div>
             </div>
 
-            {/* Contact */}
+            {/* Where they work (phone and email are never shown) */}
             <div className="mb-6 bg-gray-50 rounded-xl p-4">
-              <h2 className="text-lg font-bold text-gray-800 mb-3">
-                📞 Contact Info
-              </h2>
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-gray-400">📱</span>
-                  <span className="text-gray-700">{worker.phone || 'Booking confirm hone ke baad dikhega'}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-gray-400">📧</span>
-                  <span className="text-gray-700 break-all min-w-0">{worker.email || 'Booking confirm hone ke baad dikhega'}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-gray-400">📍</span>
-                  <span className="text-gray-700">
-                    {worker.city || 'Not specified'}
-                  </span>
-                </div>
+              <div className="flex items-center gap-3">
+                <span className="text-gray-400">📍</span>
+                <span className="text-gray-700 font-medium">
+                  {worker.city || 'Not specified'}
+                </span>
               </div>
+              <p className="mt-3 text-xs text-gray-400">
+                🔒 Privacy ke liye worker ka phone / email nahi dikhaya jaata. Book karo, baaki sab hum sambhalte hain.
+              </p>
             </div>
 
             {/* Book Button - Sirf Customer Dekhe */}

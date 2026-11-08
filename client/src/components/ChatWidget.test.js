@@ -101,12 +101,11 @@ test('the bot books on its own once the user agrees, no form needed', async () =
   click('💧 Pipe / nal leak');
   click(await screen.findByText(/Haan, Plumber book karo/));
 
-  // date -> time -> address (previous one offered) -> note -> confirm
+  // only two questions: which day, what time. The saved default address is used automatically.
   click(await screen.findByText(/^Kal \(/));
   click(await screen.findByText('10:00 AM'));
-  click(await screen.findByText(/📍 Home: 12 MG Road, Pune, India/));
-  click(await screen.findByRole('button', { name: /Skip/ }));
   expect(await screen.findByText(/Booking summary/)).toBeInTheDocument();
+  expect(screen.getAllByText(/12 MG Road, Pune, India/).length).toBeGreaterThan(0);
   click(screen.getByText(/Haan, confirm karo/));
 
   await waitFor(() => expect(axios.post).toHaveBeenCalledTimes(1));
@@ -124,6 +123,52 @@ test('the bot books on its own once the user agrees, no form needed', async () =
   expect(mockNavigate).toHaveBeenCalledWith('/track/b123');
 });
 
+test('the problem the customer typed becomes the booking note, never asked again', async () => {
+  loginAs();
+  axios.post.mockResolvedValue({ data: { success: true, message: 'ok', booking: { _id: 'b1' } } });
+  render(<ChatWidget />);
+  openChat();
+
+  type('mere bathroom ka nal tapak raha hai');
+  click(await screen.findByText(/Haan, Plumber book karo/));
+  click(await screen.findByText(/^Kal \(/));
+  click(await screen.findByText('11:00 AM'));
+
+  expect(await screen.findByText(/📝 Note: mere bathroom ka nal tapak raha hai/)).toBeInTheDocument();
+  click(screen.getByText(/Haan, confirm karo/));
+
+  await waitFor(() => expect(axios.post).toHaveBeenCalledTimes(1));
+  expect(axios.post.mock.calls[0][1]).toMatchObject({
+    service: 'Plumber',
+    time: '11:00 AM',
+    description: 'mere bathroom ka nal tapak raha hai',
+    address: '12 MG Road, Pune, India',
+  });
+});
+
+test('the address can be changed from the summary without starting over', async () => {
+  loginAs();
+  axios.get.mockResolvedValue({
+    data: {
+      addresses: [
+        { _id: 'a1', label: 'Home', full: '12 MG Road, Pune, India', isDefault: true },
+        { _id: 'a2', label: 'Work', full: '5 Tech Park, Pune, India', isDefault: false },
+      ],
+    },
+  });
+  render(<ChatWidget />);
+  openChat();
+  click('💧 Pipe / nal leak');
+  click(await screen.findByText(/Haan, Plumber book karo/));
+  click(await screen.findByText(/^Kal \(/));
+  click(await screen.findByText('10:00 AM'));
+  click(await screen.findByText(/Address badlo/));
+  click(await screen.findByText(/📍 Work: 5 Tech Park/));
+  // a fresh summary (the second one) now shows the chosen address
+  expect((await screen.findAllByText(/Booking summary/)).length).toBe(2);
+  expect(screen.getAllByText(/5 Tech Park, Pune, India/).length).toBeGreaterThan(0);
+});
+
 test('a failed booking keeps the details and offers a retry', async () => {
   loginAs();
   axios.post.mockRejectedValue({ response: { status: 500, data: { message: 'Server Error!' } } });
@@ -134,8 +179,6 @@ test('a failed booking keeps the details and offers a retry', async () => {
   click(await screen.findByText(/Haan, Electrician book karo/));
   click(await screen.findByText(/^Kal \(/));
   click(await screen.findByText('02:00 PM'));
-  click(await screen.findByText(/📍 Home: 12 MG Road/));
-  click(await screen.findByRole('button', { name: /Skip/ }));
   click(await screen.findByText(/Haan, confirm karo/));
 
   expect(await screen.findByText(/Haan, dobara try karo/)).toBeInTheDocument();

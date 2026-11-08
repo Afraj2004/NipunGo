@@ -385,7 +385,7 @@ const sendBookingCreatedEmail = async (params) => {
 
 // ── 3. Worker Assigned Email (Customer ko) ───────────────
 const sendWorkerAssignedEmail = async (params) => {
-  const { customerName, customerEmail, service, date, time, address, price, bookingId, workerName, workerPhone, workerCity, workerRating, workerExperience } = safe(params);
+  const { customerName, customerEmail, service, date, time, address, price, bookingId, workerName, workerCity, workerRating, workerExperience } = safe(params);
   const content = `
     <div class="greeting">
       Worker Mil Gaya! ✅
@@ -416,13 +416,9 @@ const sendWorkerAssignedEmail = async (params) => {
         </div>
       ` : ''}
       <div class="divider"></div>
-      <div style="text-align: center; padding: 8px 0;">
-        <div style="color: #6b7280; font-size: 13px; margin-bottom: 4px;">
-          Worker se contact karo:
-        </div>
-        <a href="tel:${workerPhone}" class="phone-link">
-          📱 ${workerPhone}
-        </a>
+      <div style="text-align: center; padding: 8px 0; color: #6b7280; font-size: 13px; line-height: 1.6;">
+        🔒 Privacy ke liye phone numbers share nahi kiye jaate.<br>
+        Booking ka live status aur <strong>START code</strong> tracking page par dekho.
       </div>
     </div>
 
@@ -474,7 +470,7 @@ const sendWorkerAssignedEmail = async (params) => {
 
 // ── 4. New Job Email (Worker ko) ──────────────────────────
 const sendNewJobEmail = async (params) => {
-  const { workerName, workerEmail, service, date, time, address, price, bookingId, customerName, customerPhone } = safe(params);
+  const { workerName, workerEmail, service, date, time, address, price, bookingId, customerName } = safe(params);
   const content = `
     <div class="greeting">
       Naya Kaam Mila! 💼
@@ -491,17 +487,6 @@ const sendNewJobEmail = async (params) => {
       <div class="detail-row">
         <span class="detail-label">Naam</span>
         <span class="detail-value">${customerName}</span>
-      </div>
-      <div class="detail-row">
-        <span class="detail-label">Phone</span>
-        <span class="detail-value">
-          <a
-            href="tel:${customerPhone}"
-            style="color: #4f46e5; font-weight: 700;"
-          >
-            📱 ${customerPhone}
-          </a>
-        </span>
       </div>
     </div>
 

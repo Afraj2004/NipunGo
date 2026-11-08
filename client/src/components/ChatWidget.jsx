@@ -193,7 +193,14 @@ function ChatWidget() {
     } catch {
       // not essential - the user can just type the address
     }
-    const started = startBooking(service, { addresses });
+    // The problem the customer already described becomes the booking note, so nobody types it twice
+    const described = [...messages].reverse().find(
+      (m) => m.role === 'user' && m.typed && !isYes(m.text) && m.text.trim().length >= 8
+    );
+    const started = startBooking(service, {
+      addresses,
+      note: described ? described.text.trim().slice(0, 300) : '',
+    });
     setFlow(started.flow);
     addMessages(started.messages.map(flowTag));
     setIsLoading(false);
@@ -210,7 +217,7 @@ function ChatWidget() {
             role: 'bot',
             text:
               `✅ Booking request bhej di gayi!\n\n${res.data.message || ''}\n\n` +
-              'Jaise hi koi worker accept karega, aapko Dashboard mein dikh jayega. 🙌',
+              'Jaise hi koi worker accept karega, tracking page par dikh jayega. Payment kaam poora hone ke baad (cash / UPI / card). 🙌',
             options: [
               {
                 label: '📍 Booking track karo',
@@ -332,7 +339,10 @@ function ChatWidget() {
     touch();
     setNotice('');
     setInput('');
-    setMessages((prev) => [...prev, { role: 'user', text: shown, ...(flow ? { isFlow: true } : {}) }]);
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', text: shown, ...(flow ? { isFlow: true } : {}), ...(!action && !flow ? { typed: true } : {}) },
+    ]);
 
     // 1) Inside the booking conversation
     if (flow && flow.step !== 'submitting') {

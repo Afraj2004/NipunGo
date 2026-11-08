@@ -82,19 +82,13 @@ function WorkerDetailCard({ worker }) {
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <a
-          href={`tel:${worker.phone}`}
-          className="flex items-center gap-2 bg-white rounded-xl p-3
-            hover:bg-indigo-50 transition"
-        >
-          <span className="text-lg">📱</span>
+        <div className="flex items-center gap-2 bg-white rounded-xl p-3">
+          <span className="text-lg">🔒</span>
           <div>
-            <p className="text-gray-400 text-xs">Call Karo</p>
-            <p className="font-bold text-primary text-sm">
-              {worker.phone}
-            </p>
+            <p className="text-gray-400 text-xs">Privacy</p>
+            <p className="font-medium text-gray-700 text-sm">Phone share nahi hota</p>
           </div>
-        </a>
+        </div>
         <div className="flex items-center gap-2 bg-white rounded-xl p-3">
           <span className="text-lg">📍</span>
           <div>
@@ -159,12 +153,12 @@ function SearchingCard({ booking, onCancel }) {
       </div>
 
       {/* Workers notified count */}
-      {booking.pendingWorkers && booking.pendingWorkers.length > 0 && (
+      {booking.workersNotified > 0 && (
         <div className="flex items-center gap-2 bg-white rounded-xl p-3 mb-3">
           <span className="text-lg">🔔</span>
           <p className="text-gray-600 text-sm">
             <span className="font-bold text-primary">
-              {booking.pendingWorkers.length}
+              {booking.workersNotified}
             </span>{' '}
             workers ko request bheji gayi hai
           </p>
@@ -535,13 +529,13 @@ useEffect(() => {
             {
               label: "Home",
               icon: "🏠",
-              color: "bg-green-500",
+              color: "bg-slate-700",
               action: () => navigate('/')
             },
             {
               label: "Refresh",
               icon: "🔄",
-              color: "bg-purple-500",
+              color: "bg-slate-500",
               action: () => {
                 setLoading(true);
                 const token = localStorage.getItem('token');
@@ -693,6 +687,15 @@ useEffect(() => {
                               font-medium ${getStatusColor(booking.status)}`}>
                               {getStatusIcon(booking.status)} {booking.status}
                             </span>
+                            {booking.status === 'Completed' && (
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                booking.paymentStatus === 'paid'
+                                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                  : 'bg-orange-100 text-orange-700 border border-orange-200'
+                              }`}>
+                                {booking.paymentStatus === 'paid' ? '✓ Paid' : '₹ Payment baaki'}
+                              </span>
+                            )}
                           </div>
 
                           {/* Booking Details Grid */}

@@ -18,6 +18,7 @@ import WorkerDashboard from './pages/WorkerDashboard';
 import Profile from './pages/Profile';
 import Track from './pages/Track';
 import NotFound from './pages/NotFound';
+import Legal from './pages/Legal';
 
 // One codebase, two sites:
 //   customers:  /, /services, /login, /register, /booking/*, /dashboard, /profile
@@ -94,6 +95,11 @@ function App() {
             path="/admin"
             element={<RequireRole roles={['admin']}><AdminDashboard /></RequireRole>}
           />
+
+          {/* Policies: public on every site */}
+          <Route path="/privacy" element={<Legal page="privacy" />} />
+          <Route path="/terms" element={<Legal page="terms" />} />
+          <Route path="/refunds" element={<Legal page="refunds" />} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

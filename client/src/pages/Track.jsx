@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft, FileText, BadgeCheck, Truck, Wrench, Flag, Check, Play, CheckCircle2, Lock,
+  Banknote, CreditCard, Star, RotateCcw, XCircle, Search, Loader2, AlertTriangle, MapPin, Receipt,
+} from 'lucide-react';
 import axios from '../utils/axios';
-import { SERVICE_ICONS } from '../data/chatKnowledge';
+import ServiceIcon from '../components/ServiceIcon';
+import { getUser } from '../utils/auth';
+import { payForBooking } from '../utils/payment';
 
 const POLL_MS = 8000;
 const ACTIVE = ['Searching', 'Confirmed', 'In Progress'];
@@ -9,6 +15,7 @@ const ACTIVE = ['Searching', 'Confirmed', 'In Progress'];
 const fmt = (iso) =>
   iso
     ? new Date(iso).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
         day: 'numeric',
         month: 'short',
         hour: 'numeric',
@@ -18,10 +25,10 @@ const fmt = (iso) =>
 
 // The five stages a booking goes through, with the time each one happened
 export const buildSteps = (b) => [
-  { key: 'requested', icon: '📝', title: 'Request bheji gayi', at: b.createdAt, done: true },
+  { key: 'requested', Icon: FileText, title: 'Request bheji gayi', at: b.createdAt, done: true },
   {
     key: 'assigned',
-    icon: '👷',
+    Icon: BadgeCheck,
     title: 'Worker mil gaya',
     at: b.acceptedAt,
     done: !!b.acceptedAt,
@@ -29,14 +36,15 @@ export const buildSteps = (b) => [
   },
   {
     key: 'onTheWay',
-    icon: '🚗',
+    Icon: Truck,
     title: 'Worker raste mein hai',
     at: b.onTheWayAt,
-    done: !!b.onTheWayAt,
+    // if work has started, the worker obviously arrived, even if they never tapped "on the way"
+    done: !!b.onTheWayAt || !!b.startedAt,
   },
   {
     key: 'started',
-    icon: '🛠️',
+    Icon: Wrench,
     title: 'Kaam shuru',
     at: b.startedAt,
     done: !!b.startedAt,
@@ -44,7 +52,7 @@ export const buildSteps = (b) => [
   },
   {
     key: 'completed',
-    icon: '🎉',
+    Icon: Flag,
     title: 'Kaam complete',
     at: b.completedAt,
     done: !!b.completedAt,
@@ -60,31 +68,29 @@ function Stepper({ booking }) {
       {steps.map((s, i) => {
         const isCurrent = i === current;
         return (
-          <li key={s.key} className="flex gap-4 pb-6 last:pb-0 relative">
+          <li key={s.key} className="relative flex gap-4 pb-6 last:pb-0">
             {i < steps.length - 1 && (
               <span
                 aria-hidden="true"
-                className={`absolute left-[19px] top-10 bottom-0 w-0.5 ${s.done ? 'bg-primary' : 'bg-gray-200'}`}
+                className={`absolute left-[19px] top-10 bottom-0 w-0.5 ${s.done ? 'bg-primary' : 'bg-slate-200'}`}
               />
             )}
             <span
               aria-hidden="true"
-              className={`relative z-10 flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-lg border-2 ${
+              className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 ${
                 s.done
-                  ? 'bg-primary border-primary text-white'
+                  ? 'border-primary bg-primary text-white'
                   : isCurrent
-                    ? 'bg-white border-primary animate-pulse'
-                    : 'bg-white border-gray-200 grayscale opacity-60'
+                    ? 'animate-pulse border-primary bg-white text-primary'
+                    : 'border-slate-200 bg-white text-slate-300'
               }`}
             >
-              {s.done ? '✓' : s.icon}
+              {s.done ? <Check size={18} strokeWidth={3} /> : <s.Icon size={18} />}
             </span>
             <div className="min-w-0 pt-1.5">
-              <p className={`font-semibold ${s.done || isCurrent ? 'text-gray-800' : 'text-gray-400'}`}>
-                {s.title}
-              </p>
-              {s.done && s.at && <p className="text-xs text-gray-400 mt-0.5">{fmt(s.at)}</p>}
-              {isCurrent && s.hint && <p className="text-sm text-gray-500 mt-1">{s.hint}</p>}
+              <p className={`font-semibold ${s.done || isCurrent ? 'text-slate-900' : 'text-slate-400'}`}>{s.title}</p>
+              {s.done && s.at && <p className="mt-0.5 text-xs text-slate-400">{fmt(s.at)}</p>}
+              {isCurrent && s.hint && <p className="mt-1 text-sm text-slate-500">{s.hint}</p>}
             </div>
           </li>
         );
@@ -100,30 +106,88 @@ function OtpCard({ booking }) {
   const code = start || end;
   if (!code) return null;
   const isStart = !!start;
+  const Icon = isStart ? Play : CheckCircle2;
   return (
     <section
-      className={`rounded-2xl p-5 sm:p-6 mb-6 text-center border-2 ${
-        isStart ? 'bg-indigo-50 border-primary/30' : 'bg-green-50 border-green-300'
+      className={`mb-6 rounded-2xl border-2 p-5 text-center sm:p-6 ${
+        isStart ? 'border-primary/30 bg-primary-50' : 'border-emerald-300 bg-emerald-50'
       }`}
       aria-live="polite"
     >
-      <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
-        {isStart ? '▶️ START code' : '✅ END code'}
+      <p className="flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wide text-slate-600">
+        <Icon size={16} aria-hidden="true" /> {isStart ? 'START code' : 'END code'}
       </p>
       <p
-        className="text-5xl sm:text-6xl font-extrabold tracking-[0.3em] pl-[0.3em] text-gray-800 my-3"
+        className="my-3 pl-[0.3em] text-5xl font-extrabold tracking-[0.3em] text-slate-900 sm:text-6xl"
         aria-label={`Code ${code.split('').join(' ')}`}
       >
         {code}
       </p>
-      <p className="text-sm text-gray-600">
+      <p className="text-sm text-slate-600">
         {isStart
           ? 'Jab worker aapke ghar pahunch kar kaam shuru kare, tab use ye code batao.'
           : 'Kaam poora hone aur aapke santusht hone par hi worker ko ye code batao.'}
       </p>
-      <p className="text-xs text-gray-400 mt-3">
-        🔒 Ye code phone/message par kisi ko mat bhejo. Sirf worker ko, saamne.
+      <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-slate-400">
+        <Lock size={12} aria-hidden="true" /> Ye code phone/message par kisi ko mat bhejo. Sirf worker ko, saamne.
       </p>
+    </section>
+  );
+}
+
+// Payment: shows what is owed, lets the customer pay online, and explains the cash route.
+function PaymentCard({ booking, onPay, paying, payMessage }) {
+  if (['Cancelled', 'No Workers'].includes(booking.status)) return null;
+
+  if (booking.paymentStatus === 'paid') {
+    return (
+      <section className="mb-6 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+        <Receipt className="mt-0.5 shrink-0 text-emerald-600" size={22} aria-hidden="true" />
+        <div>
+          <p className="font-bold text-emerald-800">Payment ho gaya: ₹{booking.paidAmount || booking.price}</p>
+          <p className="text-sm text-emerald-700">
+            {booking.paidVia === 'cash' ? 'Cash se' : 'Online'} {booking.paidAt ? `· ${fmt(booking.paidAt)}` : ''}
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  const due = booking.status === 'Completed';
+  return (
+    <section
+      className={`mb-6 rounded-2xl border-2 p-5 sm:p-6 ${due ? 'border-secondary/40 bg-secondary-50' : 'border-slate-200 bg-white'}`}
+      aria-label="Payment"
+    >
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-slate-900">{due ? 'Payment baaki hai' : 'Payment'}</h2>
+        <span className="text-2xl font-extrabold text-slate-900">₹{booking.price}</span>
+      </div>
+      <p className="mb-4 text-sm text-slate-600">
+        {due
+          ? 'Kaam ho gaya. Neeche se online pay karo, ya cash worker ko do.'
+          : 'Payment kaam poora hone ke baad hota hai. Chaho to abhi bhi online pay kar sakte ho.'}
+      </p>
+
+      {payMessage && (
+        <p role="alert" className="mb-3 flex gap-2 text-sm text-red-600">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" /> {payMessage}
+        </p>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button type="button" onClick={onPay} disabled={paying} className={due ? 'btn-secondary' : 'btn-outline'}>
+          {paying ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : <CreditCard size={16} aria-hidden="true" />}
+          {paying ? 'Payment khul raha hai...' : `Online pay karo (UPI / card)`}
+        </button>
+        <div className="flex items-start gap-2 rounded-xl bg-white/70 px-3 py-2 text-sm text-slate-600">
+          <Banknote size={18} className="mt-0.5 shrink-0 text-slate-400" aria-hidden="true" />
+          <span>
+            <strong className="text-slate-800">Cash?</strong> Worker ko ₹{booking.price} do. Woh confirm karenge to yahan
+            "Paid" dikh jayega.
+          </span>
+        </div>
+      </div>
     </section>
   );
 }
@@ -134,6 +198,8 @@ function Track() {
   const [booking, setBooking] = useState(null);
   const [error, setError] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [payMessage, setPayMessage] = useState('');
   const timer = useRef(null);
 
   const load = useCallback(async () => {
@@ -152,13 +218,14 @@ function Track() {
     }
   }, [bookingId]);
 
-  // Refresh while the booking is still moving; stop once it is finished
+  // Refresh while the booking is still moving (or money is still owed); stop once everything is settled
   useEffect(() => {
     let stopped = false;
     const tick = async () => {
       const b = await load();
       if (stopped) return;
-      if (b && !ACTIVE.includes(b.status)) return;
+      const settled = b && !ACTIVE.includes(b.status) && (b.paymentStatus === 'paid' || ['Cancelled', 'No Workers'].includes(b.status));
+      if (settled) return;
       timer.current = setTimeout(tick, POLL_MS);
     };
     tick();
@@ -181,151 +248,165 @@ function Track() {
     }
   };
 
+  const pay = async () => {
+    setPaying(true);
+    setPayMessage('');
+    const result = await payForBooking(bookingId, getUser() || {});
+    if (result.status === 'failed') setPayMessage(result.message);
+    await load();
+    setPaying(false);
+  };
+
   if (error && !booking) {
     return (
-      <div className="max-w-xl mx-auto px-4 py-16 text-center">
-        <div className="text-5xl mb-4">🔍</div>
-        <p className="text-gray-600 mb-6">{error}</p>
-        <Link to="/dashboard" className="bg-primary text-white px-6 py-3 rounded-xl font-semibold">
-          Dashboard par jao
-        </Link>
+      <div className="mx-auto max-w-xl px-4 py-16 text-center">
+        <Search className="mx-auto mb-4 text-slate-300" size={44} aria-hidden="true" />
+        <p className="mb-6 text-slate-600">{error}</p>
+        <Link to="/dashboard" className="btn-primary">Dashboard par jao</Link>
       </div>
     );
   }
   if (!booking) {
-    return <div className="max-w-xl mx-auto px-4 py-16 text-center text-gray-400">Loading...</div>;
+    return <div className="mx-auto max-w-xl px-4 py-16 text-center text-slate-400">Loading...</div>;
   }
 
   const worker = booking.assignedWorker;
   const cancelled = booking.status === 'Cancelled';
   const noWorkers = booking.status === 'No Workers';
-  const canCancel = ['Searching', 'Confirmed'].includes(booking.status);
+  const canCancel = ['Searching', 'Confirmed'].includes(booking.status) && booking.paymentStatus !== 'paid';
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-8">
+    <div className="mx-auto max-w-xl px-4 py-6 sm:py-8">
       <button
         onClick={() => navigate('/dashboard')}
-        className="text-sm text-gray-500 hover:text-primary mb-2 py-2.5 pr-3"
+        className="mb-2 inline-flex min-h-[44px] items-center gap-1.5 pr-3 text-sm font-medium text-slate-500 hover:text-primary"
       >
-        ← Meri bookings
+        <ArrowLeft size={16} aria-hidden="true" /> Meri bookings
       </button>
 
-      <header className="flex items-center gap-3 mb-6">
-        <span className="text-4xl" aria-hidden="true">{SERVICE_ICONS[booking.service] || '🔧'}</span>
+      <header className="mb-6 flex items-center gap-4">
+        <ServiceIcon service={booking.service} size={52} />
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-gray-800">{booking.service}</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">{booking.service}</h1>
+          <p className="text-sm text-slate-500">
             {booking.date} · {booking.time} · ID #{String(booking._id).slice(-8).toUpperCase()}
           </p>
         </div>
       </header>
 
       {error && (
-        <div role="alert" className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-xl mb-4 text-sm">
-          ⚠️ {error}
+        <div role="alert" className="mb-4 flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" /> {error}
         </div>
       )}
 
       {cancelled && (
-        <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-xl mb-6">
-          ❌ Ye booking cancel ho gayi{booking.cancelledAt ? ` (${fmt(booking.cancelledAt)})` : ''}.
+        <div className="mb-6 flex gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
+          <XCircle size={20} className="shrink-0" aria-hidden="true" />
+          Ye booking cancel ho gayi{booking.cancelledAt ? ` (${fmt(booking.cancelledAt)})` : ''}.
         </div>
       )}
       {noWorkers && (
-        <div className="bg-gray-50 border border-gray-200 text-gray-600 p-4 rounded-xl mb-6">
-          😔 Is booking ke liye koi worker available nahi tha.
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-600">
+          Is booking ke liye koi worker available nahi tha.
         </div>
       )}
 
       <OtpCard booking={booking} />
 
+      {/* After the service, the bill comes before everything else */}
+      {booking.status === 'Completed' && (
+        <PaymentCard booking={booking} onPay={pay} paying={paying} payMessage={payMessage} />
+      )}
+
       {!cancelled && !noWorkers && (
-        <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 mb-6">
-          <h2 className="font-bold text-gray-800 mb-5">Progress</h2>
+        <section className="card mb-6 p-5 sm:p-6">
+          <h2 className="mb-5 font-bold text-slate-900">Progress</h2>
           <Stepper booking={booking} />
           {ACTIVE.includes(booking.status) && (
-            <p className="text-xs text-gray-400 mt-5">Ye page khud update hota rehta hai.</p>
+            <p className="mt-5 text-xs text-slate-400">Ye page khud update hota rehta hai.</p>
           )}
         </section>
       )}
 
       {worker && !cancelled && (
-        <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 mb-6">
-          <h2 className="font-bold text-gray-800 mb-4">Aapka worker</h2>
+        <section className="card mb-6 p-5 sm:p-6">
+          <h2 className="mb-4 font-bold text-slate-900">Aapka worker</h2>
           <div className="flex items-center gap-4">
             {worker.photoUrl ? (
-              <img src={worker.photoUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 border-primary" />
+              <img src={worker.photoUrl} alt="" className="h-16 w-16 rounded-full border-2 border-primary object-cover" />
             ) : (
-              <div className="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center text-2xl font-bold" aria-hidden="true">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl font-bold text-white" aria-hidden="true">
                 {worker.name?.charAt(0).toUpperCase()}
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-gray-800 truncate">{worker.name}</p>
-              <p className="text-sm text-gray-500">
-                {worker.service}
-                {worker.city ? ` · ${worker.city}` : ''}
-                {worker.rating ? ` · ⭐ ${Number(worker.rating).toFixed(1)}` : ''}
+              <p className="truncate font-semibold text-slate-900">{worker.name}</p>
+              <p className="flex flex-wrap items-center gap-x-2 text-sm text-slate-500">
+                <span>{worker.service}{worker.city ? ` · ${worker.city}` : ''}</span>
+                {worker.rating ? (
+                  <span className="inline-flex items-center gap-0.5 text-amber-600">
+                    <Star size={13} fill="currentColor" aria-hidden="true" /> {Number(worker.rating).toFixed(1)}
+                  </span>
+                ) : null}
               </p>
             </div>
-            {worker.phone && (
-              <a
-                href={`tel:${worker.phone}`}
-                className="flex-shrink-0 bg-green-500 text-white px-4 py-2.5 rounded-xl font-semibold text-sm hover:bg-green-600 transition"
-              >
-                📞 Call
-              </a>
-            )}
           </div>
+          <p className="mt-4 flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">
+            <Lock size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+            Aapki privacy ke liye phone numbers share nahi hote. Kaam ka sab update yahin milega.
+          </p>
         </section>
       )}
 
-      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 mb-6">
-        <h2 className="font-bold text-gray-800 mb-3">Booking details</h2>
+      <section className="card mb-6 p-5 sm:p-6">
+        <h2 className="mb-3 font-bold text-slate-900">Booking details</h2>
         <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-gray-400">📍 Address</dt>
-          <dd className="text-gray-700 break-words">{booking.address}</dd>
+          <dt className="flex items-center gap-1.5 text-slate-400"><MapPin size={14} aria-hidden="true" /> Address</dt>
+          <dd className="break-words text-slate-700">{booking.address}</dd>
           {booking.description && (
             <>
-              <dt className="text-gray-400">📝 Note</dt>
-              <dd className="text-gray-700 break-words">{booking.description}</dd>
+              <dt className="flex items-center gap-1.5 text-slate-400"><FileText size={14} aria-hidden="true" /> Note</dt>
+              <dd className="break-words text-slate-700">{booking.description}</dd>
             </>
           )}
-          <dt className="text-gray-400">💰 Amount</dt>
-          <dd className="text-gray-700 font-semibold">₹{booking.price} (cash after work)</dd>
+          <dt className="flex items-center gap-1.5 text-slate-400"><Banknote size={14} aria-hidden="true" /> Amount</dt>
+          <dd className="font-semibold text-slate-700">₹{booking.price}</dd>
         </dl>
       </section>
 
+      {/* Before the service the payment card is secondary */}
+      {booking.status !== 'Completed' && (
+        <PaymentCard booking={booking} onPay={pay} paying={paying} payMessage={payMessage} />
+      )}
+
       <div className="flex flex-wrap gap-3">
         {canCancel && (
-          <button
-            onClick={cancel}
-            disabled={cancelling}
-            className="bg-red-50 text-red-500 border border-red-200 px-5 py-3 rounded-xl font-semibold hover:bg-red-100 transition disabled:opacity-60"
-          >
-            {cancelling ? '⏳ Cancelling...' : '❌ Booking cancel karo'}
+          <button onClick={cancel} disabled={cancelling} className="btn-danger">
+            {cancelling ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : <XCircle size={16} aria-hidden="true" />}
+            {cancelling ? 'Cancelling...' : 'Booking cancel karo'}
           </button>
         )}
         {booking.status === 'Completed' && (
-          <button
-            onClick={() => navigate(`/review/${booking._id}`)}
-            className="bg-yellow-50 text-yellow-700 border border-yellow-200 px-5 py-3 rounded-xl font-semibold hover:bg-yellow-100 transition"
-          >
-            ⭐ Review do
+          <button onClick={() => navigate(`/review/${booking._id}`)} className="btn-outline">
+            <Star size={16} aria-hidden="true" /> Review do
           </button>
         )}
         {(cancelled || noWorkers || booking.status === 'Completed') && (
-          <button
-            onClick={() => navigate(`/booking/${encodeURIComponent(booking.service)}`)}
-            className="bg-primary text-white px-5 py-3 rounded-xl font-semibold hover:bg-indigo-700 transition"
-          >
-            🔁 Dobara book karo
+          <button onClick={() => navigate(`/booking/${encodeURIComponent(booking.service)}`)} className="btn-primary">
+            <RotateCcw size={16} aria-hidden="true" /> Dobara book karo
           </button>
         )}
         {booking.status === 'In Progress' && (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-slate-500">
             Kaam chal raha hai. Koi dikkat ho to{' '}
             <a href="mailto:support@nipungo.com" className="text-primary underline">support se baat karo</a>.
+          </p>
+        )}
+        {booking.paymentStatus === 'paid' && booking.status !== 'Completed' && !cancelled && (
+          <p className="text-sm text-slate-500">
+            Payment ho chuka hai. Cancel / refund ke liye{' '}
+            <a href="mailto:support@nipungo.com" className="text-primary underline">support</a> se baat karo.
           </p>
         )}
       </div>

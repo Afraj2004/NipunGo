@@ -82,6 +82,16 @@ const bookingSchema = new mongoose.Schema({
   completedAt: { type: Date, default: null },  // end OTP verified
   cancelledAt: { type: Date, default: null },
 
+  // ── Payment ────────────────────────────────
+  // paymentMethod is what the customer chose when booking; they can still switch at the end.
+  paymentMethod: { type: String, enum: ['cash', 'online'], default: 'cash' },
+  paymentStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' },
+  paidVia: { type: String, enum: ['cash', 'online', null], default: null },
+  paidAt: { type: Date, default: null },
+  paidAmount: { type: Number, default: 0 },
+  razorpayOrderId: { type: String, default: null },
+  razorpayPaymentId: { type: String, default: null },
+
   // Guessing protection for the 4-digit start/end codes
   otpFailures: { type: Number, default: 0 },
   otpLockedUntil: { type: Date, default: null },

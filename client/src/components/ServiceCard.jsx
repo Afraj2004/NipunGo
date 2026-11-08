@@ -1,4 +1,5 @@
 import React from 'react';
+import ServiceIcon from './ServiceIcon';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
@@ -47,9 +48,8 @@ function ServiceCard({ service, viewMode = 'grid' }) {
             </div>
           )}
 
-          <div className="text-5xl mb-3 group-hover:scale-110
-            transition-transform duration-300">
-            {service.icon}
+          <div className="mb-3 transition-transform duration-300 group-hover:scale-110">
+            <ServiceIcon service={service.name} size={72} />
           </div>
           <span className="bg-indigo-100 text-primary text-xs
             px-3 py-1 rounded-full font-medium">
@@ -119,9 +119,8 @@ function ServiceCard({ service, viewMode = 'grid' }) {
         transition-all duration-300 p-5 flex items-center gap-5"
     >
       {/* Icon */}
-      <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex
-        items-center justify-center text-3xl flex-shrink-0 relative">
-        {service.icon}
+      <div className="relative flex-shrink-0">
+        <ServiceIcon service={service.name} size={64} />
         {service.totalBookings > 300 && (
           <div className="absolute -top-1 -right-1 bg-secondary
             text-white text-xs w-5 h-5 rounded-full flex items-center

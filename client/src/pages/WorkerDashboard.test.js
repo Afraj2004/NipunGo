@@ -127,3 +127,68 @@ test('Cancel closes the dialog without calling the server', async () => {
   expect(screen.queryByText(/Kaam shuru karo/)).toBeNull();
   expect(axios.post).not.toHaveBeenCalled();
 });
+
+describe('privacy and payment on the worker side', () => {
+  const finished = {
+    ...job,
+    status: 'Completed',
+    startedAt: '2027-01-05T10:05:00Z',
+    completedAt: '2027-01-05T11:00:00Z',
+    paymentStatus: 'pending',
+  };
+
+  test("a job card never shows the customer's phone or email", async () => {
+    setup({ ...job, customer: { name: 'Asha R.' } });
+    await openMyBookings();
+    expect(await screen.findByText('Asha R.')).toBeInTheDocument();
+    expect(document.querySelector('a[href^="tel:"]')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/9876543210|@example\.com/);
+    expect(screen.getByText(/Phone number privacy ke liye hidden/)).toBeInTheDocument();
+  });
+
+  test('a finished, unpaid job offers "cash mil gaya" and records it after confirming', async () => {
+    setup(finished);
+    window.confirm = jest.fn(() => true);
+    axios.put.mockResolvedValue({
+      data: { success: true, booking: { paymentStatus: 'paid', paidVia: 'cash', paidAmount: 250, paidAt: '2027-01-05T11:30:00Z' } },
+    });
+    await openMyBookings();
+
+    fireEvent.click(await screen.findByText(/₹250 cash mil gaya/));
+    await waitFor(() => expect(axios.put).toHaveBeenCalledWith('/booking/cash-received/b1', {}));
+    expect(await screen.findByText(/₹250 paid/)).toBeInTheDocument();
+    expect(screen.queryByText(/cash mil gaya/)).toBeNull();
+  });
+
+  test('declining the confirmation records nothing', async () => {
+    setup(finished);
+    window.confirm = jest.fn(() => false);
+    await openMyBookings();
+    fireEvent.click(await screen.findByText(/cash mil gaya/));
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+
+  test('a job the customer already paid online shows as paid with no cash button', async () => {
+    setup({ ...finished, paymentStatus: 'paid', paidVia: 'online', paidAmount: 250 });
+    await openMyBookings();
+    expect(await screen.findByText(/₹250 paid/)).toBeInTheDocument();
+    expect(screen.getByText(/\(online\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/cash mil gaya/)).toBeNull();
+  });
+
+  test('an open request shows only the area (the server masked the street address)', async () => {
+    localStorage.setItem('token', 't');
+    localStorage.setItem('user', JSON.stringify({ id: 'w1', name: 'Ravi Kumar', role: 'worker' }));
+    axios.get.mockImplementation(async (url) => {
+      if (url.startsWith('/booking/worker-requests/')) {
+        return { data: { success: true, requests: [{ ...job, _id: 'r1', status: 'Searching', customer: { name: 'Asha R.' }, address: 'Pune - 411001 area (poora address accept karne ke baad)' }] } };
+      }
+      if (url.startsWith('/booking/worker-bookings/')) return { data: { success: true, bookings: [] } };
+      return { data: { success: true, worker: { _id: 'w1', name: 'Ravi Kumar', service: 'Plumber', city: 'Pune', isAvailable: true } } };
+    });
+    render(<WorkerDashboard />);
+    expect(await screen.findByText(/Pune - 411001 area/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/MG Road/);
+    expect(document.body.textContent).not.toMatch(/@example\.com/);
+  });
+});

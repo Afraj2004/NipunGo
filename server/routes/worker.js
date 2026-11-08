@@ -5,7 +5,6 @@ const router   = express.Router();
 const User     = require('../models/User');
 const { cloudinary, upload } = require('../config/cloudinary');
 const jwt = require('jsonwebtoken');
-const Booking = require('../models/Booking');
 const { protect } = require('../middleware/auth');
 const { SERVICE_PRICES } = require('../config/services');
 
@@ -25,23 +24,13 @@ const optionalAuth = async (req, res, next) => {
   next();
 };
 
-// Remove phone/email unless the viewer is the worker, an admin, or a customer
-// who has a confirmed/completed booking with this worker.
+// Phone and email are private. Only the worker themself and admins ever see them;
+// customers and workers talk through the booking (tracking, OTP codes), not each other's numbers.
 const withContactRules = async (workerDoc, viewer) => {
   const worker = workerDoc.toObject ? workerDoc.toObject() : { ...workerDoc };
-  let canSee = false;
-  if (viewer) {
-    if (viewer.role === 'admin' || String(viewer._id) === String(worker._id)) {
-      canSee = true;
-    } else {
-      canSee = !!(await Booking.exists({
-        customer: viewer._id,
-        assignedWorker: worker._id,
-        status: { $in: ['Confirmed', 'Completed'] },
-      }));
-    }
-  }
-  if (!canSee) {
+  const allowed =
+    !!viewer && (viewer.role === 'admin' || String(viewer._id) === String(worker._id));
+  if (!allowed) {
     delete worker.phone;
     delete worker.email;
   }

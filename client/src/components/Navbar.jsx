@@ -3,6 +3,7 @@ import { clearAllChats } from '../utils/chatStorage';
 import { getUser, clearSession, showCustomerSite } from '../utils/auth';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Home as HomeIcon, Wrench, LayoutDashboard, User as UserIcon, ShieldCheck, LogOut, Menu, X } from 'lucide-react';
 
 function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -51,17 +52,17 @@ function Navbar() {
   const navLinks =
     role === 'worker'
       ? [
-          { path: '/worker/dashboard', label: 'Dashboard', icon: '📋' },
-          { path: '/profile', label: 'Profile', icon: '👤' },
+          { path: '/worker/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { path: '/profile', label: 'Profile', icon: UserIcon },
         ]
       : role === 'admin'
-        ? [{ path: '/', label: 'Home', icon: '🏠' }]
+        ? [{ path: '/', label: 'Home', icon: HomeIcon }]
         : showCustomerSite
           ? [
-              { path: '/', label: 'Home', icon: '🏠' },
-              { path: '/services', label: 'Services', icon: '🔧' },
-              { path: '/dashboard', label: 'Dashboard', icon: '📋' },
-              ...(role === 'customer' ? [{ path: '/profile', label: 'Profile', icon: '👤' }] : []),
+              { path: '/', label: 'Home', icon: HomeIcon },
+              { path: '/services', label: 'Services', icon: Wrench },
+              { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+              ...(role === 'customer' ? [{ path: '/profile', label: 'Profile', icon: UserIcon }] : []),
             ]
           : [];
 
@@ -138,7 +139,7 @@ function Navbar() {
                       whileHover={{ y: -2 }}
                       className="px-4 py-2 bg-gray-800 text-white rounded-xl font-medium text-sm hover:bg-gray-700 transition"
                     >
-                      🔐 Admin
+                      <ShieldCheck size={15} aria-hidden="true" /> Admin
                     </motion.div>
                   </Link>
                 )}
@@ -169,7 +170,7 @@ function Navbar() {
                     whileTap={{ scale: 0.95 }}
                     className="px-5 py-2 bg-primary text-white rounded-xl font-medium shadow-md hover:bg-indigo-700 transition"
                   >
-                    Register ✨
+                    Register
                   </motion.div>
                 </Link>
               </div>
@@ -177,26 +178,14 @@ function Navbar() {
           </div>
 
           {/* Mobile Menu Button */}
-          <motion.button
-            whileTap={{ scale: 0.9 }}
+          <button
             onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden w-10 h-10 flex items-center justify-center bg-gray-100 rounded-xl"
+            aria-label={isOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={isOpen}
+            className="md:hidden flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition hover:bg-slate-200"
           >
-            <motion.div
-              animate={{ rotate: isOpen ? 90 : 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              {isOpen ? (
-                <span className="text-xl font-bold text-gray-600">✕</span>
-              ) : (
-                <div className="flex flex-col gap-1.5">
-                  <div className="w-5 h-0.5 bg-gray-600 rounded"></div>
-                  <div className="w-5 h-0.5 bg-gray-600 rounded"></div>
-                  <div className="w-5 h-0.5 bg-gray-600 rounded"></div>
-                </div>
-              )}
-            </motion.div>
-          </motion.button>
+            {isOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
+          </button>
 
         </div>
       </div>
@@ -230,7 +219,7 @@ function Navbar() {
                         : 'text-gray-600 hover:bg-indigo-50'
                     }`}
                   >
-                    <span>{link.icon}</span>
+                    <link.icon size={18} aria-hidden="true" />
                     {link.label}
                   </Link>
                 </motion.div>
@@ -264,7 +253,7 @@ function Navbar() {
                       onClick={() => setIsOpen(false)}
                       className="flex items-center gap-3 px-4 py-3 bg-gray-800 text-white rounded-xl font-medium"
                     >
-                      🔐 Admin Dashboard
+                      <ShieldCheck size={18} aria-hidden="true" /> Admin Dashboard
                     </Link>
                   )}
 
@@ -273,7 +262,7 @@ function Navbar() {
                     onClick={handleLogout}
                     className="flex items-center gap-3 px-4 py-3 bg-red-50 text-red-500 rounded-xl font-medium"
                   >
-                    🚪 Logout
+                    <LogOut size={18} aria-hidden="true" /> Logout
                   </button>
                 </>
               ) : (
@@ -290,7 +279,7 @@ function Navbar() {
                     onClick={() => setIsOpen(false)}
                     className="flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white rounded-xl font-bold shadow-md"
                   >
-                    Register ✨
+                    Register
                   </Link>
                 </>
               )}

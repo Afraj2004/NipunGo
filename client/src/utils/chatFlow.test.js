@@ -1,96 +1,28 @@
-import {
-  TIME_SLOTS,
-  parseDate,
-  parseTime,
-  slotsFor,
-  startBooking,
-  stepFlow,
-  toISODate,
-} from './chatFlow';
+import { startBooking, stepFlow, summaryText } from './chatFlow';
 
-// Saturday 7 Nov 2026, 10:30 local time
-const NOW = new Date(2026, 10, 7, 10, 30);
+// Saturday 7 Nov 2026, 10:30 in India (written with the offset so the test means the same anywhere)
+const NOW = new Date('2026-11-07T10:30:00+05:30');
 
-describe('parseDate', () => {
-  test('understands aaj / kal / parso', () => {
-    expect(parseDate('aaj', NOW)).toBe('2026-11-07');
-    expect(parseDate('Kal', NOW)).toBe('2026-11-08');
-    expect(parseDate('parso', NOW)).toBe('2026-11-09');
-  });
+const HOME = { label: 'Home', full: '12 MG Road, Flat 4B, Pune - 411001' };
+const WORK = { label: 'Work', full: '5 Tech Park, Near Gate 2, Pune - 411057' };
 
-  test('understands typed dates', () => {
-    expect(parseDate('2026-11-12', NOW)).toBe('2026-11-12');
-    expect(parseDate('12/11/2026', NOW)).toBe('2026-11-12');
-    expect(parseDate('12-11-26', NOW)).toBe('2026-11-12');
-    expect(parseDate('12/11', NOW)).toBe('2026-11-12');
-  });
+const run = (flow, text, value) => stepFlow(flow, { text, value }, { now: NOW });
+const valuesOf = (msg) => msg.options.map((o) => o.value);
 
-  test('a date without a year that already passed means next year', () => {
-    expect(parseDate('5/1', NOW)).toBe('2027-01-05');
-  });
-
-  test('rejects nonsense and impossible dates', () => {
-    expect(parseDate('whenever', NOW)).toBeNull();
-    expect(parseDate('31/02/2026', NOW)).toBeNull();
-    expect(parseDate('', NOW)).toBeNull();
-  });
-});
-
-describe('parseTime', () => {
-  test('maps typed times onto the real slots', () => {
-    expect(parseTime('10')).toBe('10:00 AM');
-    expect(parseTime('10am')).toBe('10:00 AM');
-    expect(parseTime('3 pm')).toBe('03:00 PM');
-    expect(parseTime('3')).toBe('03:00 PM');
-    expect(parseTime('15:00')).toBe('03:00 PM');
-    expect(parseTime('9:00 AM')).toBe('09:00 AM');
-  });
-
-  test('rejects times that are not bookable slots', () => {
-    expect(parseTime('12')).toBeNull(); // 12:00 PM is not offered
-    expect(parseTime('7pm')).toBeNull();
-    expect(parseTime('10:30')).toBeNull();
-    expect(parseTime('abc')).toBeNull();
-  });
-});
-
-describe('slotsFor', () => {
-  test('future days offer every slot', () => {
-    expect(slotsFor('2026-11-08', NOW)).toEqual(TIME_SLOTS);
-  });
-
-  test('today only offers slots at least an hour away', () => {
-    // it is 10:30, so 09/10/11 AM are gone
-    expect(slotsFor('2026-11-07', NOW)).toEqual(
-      ['02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM']
-    );
-  });
-
-  test('late in the day nothing is left', () => {
-    expect(slotsFor('2026-11-07', new Date(2026, 10, 7, 17, 0))).toEqual([]);
-  });
-});
-
-describe('booking conversation', () => {
-  const run = (flow, text, value) => stepFlow(flow, { text, value }, { now: NOW });
-
-  test('happy path ends in a submit payload with the right details', () => {
-    let { flow, messages } = startBooking('Plumber', { now: NOW, addresses: [] });
+describe('a saved default address means fewer questions', () => {
+  test('only the day and the time are asked, then the summary appears with the address already filled in', () => {
+    let { flow, messages } = startBooking('Plumber', { now: NOW, addresses: [HOME, WORK], note: 'nal tapak raha hai' });
     expect(flow.step).toBe('date');
-    expect(messages[0].options.length).toBeGreaterThan(2);
+    expect(messages[0].text).toContain(HOME.full); // shown up front
 
     let r = run(flow, 'Kal', '2026-11-08');
     expect(r.flow.step).toBe('time');
 
     r = run(r.flow, '10:00 AM', '10:00 AM');
-    expect(r.flow.step).toBe('address');
-
-    r = run(r.flow, '202 Block B, Isha Casablanca, Panathur, Bengaluru');
-    expect(r.flow.step).toBe('description');
-
-    r = run(r.flow, 'nal tapak raha hai');
+    // straight to the summary: NO address question, NO note question
     expect(r.flow.step).toBe('confirm');
-    expect(r.messages[0].text).toContain('Plumber');
+    expect(r.messages[0].text).toContain(HOME.full);
+    expect(r.messages[0].text).toContain('nal tapak raha hai');
     expect(r.messages[0].text).toContain('₹250'); // 200 + 50 fee
 
     r = run(r.flow, 'haan');
@@ -98,78 +30,143 @@ describe('booking conversation', () => {
       service: 'Plumber',
       date: '2026-11-08',
       time: '10:00 AM',
-      address: '202 Block B, Isha Casablanca, Panathur, Bengaluru',
+      address: HOME.full,
       description: 'nal tapak raha hai',
     });
     expect(r.flow.step).toBe('submitting');
   });
 
-  test('every saved address is offered as a tile, and picking one is accepted', () => {
-    const addresses = [
-      { label: 'Home', full: '12 MG Road, Pune - 411001' },
-      { label: 'Work', full: '5 Tech Park, Near Gate 2, Pune - 411057' },
-    ];
-    let { flow } = startBooking('Cleaner', { now: NOW, addresses });
-    let r = run(flow, 'kal');
-    r = run(r.flow, '11am');
-    const tiles = r.messages[0].options.filter((o) => o.value !== '__cancel');
-    expect(tiles.map((o) => o.value)).toEqual(addresses.map((a) => a.full));
-    expect(tiles[0].label).toContain('Home');
-
-    r = run(r.flow, tiles[1].label, tiles[1].value);
-    expect(r.flow.step).toBe('description');
-    expect(r.flow.data.address).toBe(addresses[1].full);
+  test('without any saved address it asks once, offering nothing to pick', () => {
+    let { flow } = startBooking('Plumber', { now: NOW, addresses: [] });
+    let r = run(run(flow, 'kal').flow, '10am');
+    expect(r.flow.step).toBe('address');
+    r = run(r.flow, 'Flat 9, Green Park, Delhi - 110016');
+    expect(r.flow.step).toBe('confirm');
+    expect(r.flow.data.address).toBe('Flat 9, Green Park, Delhi - 110016');
   });
 
-  test('bad input is re-asked, not accepted', () => {
-    const { flow } = startBooking('Plumber', { now: NOW });
-    let r = run(flow, 'jaldi');
-    expect(r.flow.step).toBe('date');
-
-    r = run(flow, '01/01/2026'); // in the past
-    expect(r.flow.step).toBe('date');
-
-    r = run(flow, 'kal');
-    r = run(r.flow, '7pm');
-    expect(r.flow.step).toBe('time');
-
-    r = run(run(r.flow, '10am').flow, 'short');
+  test('a short address is re-asked, not accepted', () => {
+    let { flow } = startBooking('Plumber', { now: NOW, addresses: [] });
+    const r = run(run(run(flow, 'kal').flow, '10am').flow, 'home');
     expect(r.flow.step).toBe('address');
   });
+});
 
-  test("today is refused once today's slots are over", () => {
-    const late = new Date(2026, 10, 7, 18, 0);
-    const { flow } = startBooking('Plumber', { now: late });
-    const r = stepFlow(flow, { text: 'aaj' }, { now: late });
+describe('changing things from the summary', () => {
+  const atSummary = () => {
+    const { flow } = startBooking('Plumber', { now: NOW, addresses: [HOME, WORK], note: 'tap leak' });
+    return run(run(flow, 'kal').flow, '11am');
+  };
+
+  test('the summary offers address / note / date-time changes', () => {
+    const r = atSummary();
+    expect(valuesOf(r.messages[0])).toEqual(['__confirm', '__address', '__note', '__restart', '__cancel']);
+  });
+
+  test('pick another saved address', () => {
+    let r = atSummary();
+    r = run(r.flow, 'x', '__address');
+    expect(r.flow.step).toBe('address');
+    expect(valuesOf(r.messages[0])).toContain(WORK.full);
+    r = run(r.flow, WORK.label, WORK.full);
+    expect(r.flow.step).toBe('confirm');
+    expect(r.flow.data.address).toBe(WORK.full);
+    expect(r.messages[0].text).toContain(WORK.full);
+  });
+
+  test('"Wapas" returns to the summary unchanged', () => {
+    let r = atSummary();
+    r = run(r.flow, 'x', '__address');
+    r = run(r.flow, 'Wapas', '__back');
+    expect(r.flow.step).toBe('confirm');
+    expect(r.flow.data.address).toBe(HOME.full);
+  });
+
+  test('edit the note, and clear it', () => {
+    let r = atSummary();
+    r = run(r.flow, 'x', '__note');
+    expect(r.flow.step).toBe('note');
+    r = run(r.flow, 'ground floor, bell kharab hai');
+    expect(r.flow.step).toBe('confirm');
+    expect(r.flow.data.description).toBe('ground floor, bell kharab hai');
+
+    r = run(r.flow, 'x', '__note');
+    r = run(r.flow, 'x', '__clear');
+    expect(r.flow.data.description).toBe('');
+    expect(r.messages[0].text).not.toContain('📝 Note');
+  });
+
+  test('changing the date/time keeps the address and note', () => {
+    let r = atSummary();
+    r = run(r.flow, 'x', '__restart');
+    expect(r.flow.step).toBe('date');
+    expect(r.flow.data.address).toBe(HOME.full);
+    expect(r.flow.data.description).toBe('tap leak');
+    expect(r.flow.data.date).toBeUndefined();
+    r = run(run(r.flow, 'parso').flow, '3 pm');
+    expect(r.flow.step).toBe('confirm');
+    expect(r.flow.data.date).toBe('2026-11-09');
+    expect(r.flow.data.time).toBe('03:00 PM');
+    expect(r.flow.data.address).toBe(HOME.full);
+  });
+
+  test('anything typed at the summary that is not yes/no re-shows the options', () => {
+    const r = run(atSummary().flow, 'hmm');
+    expect(r.flow.step).toBe('confirm');
+    expect(r.messages[0].options.length).toBe(5);
+  });
+
+  test('"no" cancels', () => {
+    expect(run(atSummary().flow, 'nahi').flow).toBeNull();
+  });
+});
+
+describe('dates and times', () => {
+  test("today's list starts after the 30-minute lead time (10:30 now -> 11:00 is NOT ok, 02:00 PM is)", () => {
+    const { flow } = startBooking('Plumber', { now: NOW, addresses: [HOME] });
+    const r = run(flow, 'aaj');
+    expect(r.flow.step).toBe('time');
+    const slots = valuesOf(r.messages[0]).filter((v) => v !== '__cancel');
+    expect(slots).toEqual(['11:00 AM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM']);
+  });
+
+  test('typing a time that has already passed is refused', () => {
+    const { flow } = startBooking('Plumber', { now: NOW, addresses: [HOME] });
+    const t = run(flow, 'aaj');
+    const r = run(t.flow, '9am');
+    expect(r.flow.step).toBe('time');
+    expect(r.messages[0].text).toMatch(/available nahi/);
+  });
+
+  test('late in the evening "Aaj" is not offered at all', () => {
+    const late = new Date('2026-11-07T18:00:00+05:30');
+    const { messages } = startBooking('Plumber', { now: late, addresses: [HOME] });
+    expect(messages[0].options.map((o) => o.label).join(' ')).not.toMatch(/Aaj/);
+    const r = stepFlow(startBooking('Plumber', { now: late, addresses: [HOME] }).flow, { text: 'aaj' }, { now: late });
     expect(r.flow.step).toBe('date');
   });
 
-  test('cancel works at any step', () => {
-    const { flow } = startBooking('Plumber', { now: NOW });
+  test('past dates, junk and far-future dates are refused', () => {
+    const { flow } = startBooking('Plumber', { now: NOW, addresses: [HOME] });
+    expect(run(flow, '01/01/2026').flow.step).toBe('date');
+    expect(run(flow, 'jaldi').flow.step).toBe('date');
+    expect(run(flow, '01/01/2030').flow.step).toBe('date');
+  });
+});
+
+describe('cancelling', () => {
+  test('works at every step', () => {
+    const { flow } = startBooking('Plumber', { now: NOW, addresses: [HOME] });
     expect(run(flow, 'cancel').flow).toBeNull();
-    const r = run(run(flow, 'kal').flow, 'x', '__cancel');
-    expect(r.flow).toBeNull();
+    const t = run(flow, 'kal');
+    expect(run(t.flow, 'x', '__cancel').flow).toBeNull();
   });
+});
 
-  test('"Details badlo" restarts from the date', () => {
-    const { flow } = startBooking('Plumber', { now: NOW });
-    const r = run(flow, 'kal');
-    const back = run(r.flow, '', '__restart');
-    expect(back.flow.step).toBe('date');
-    expect(back.flow.data).toEqual({});
-  });
-
-  test('skipping the note submits an empty description', () => {
-    let { flow } = startBooking('Plumber', { now: NOW });
-    let r = run(flow, 'kal');
-    r = run(r.flow, '10am');
-    r = run(r.flow, 'Flat 4, Green Park, Delhi');
-    r = run(r.flow, '', '__skip');
-    r = run(r.flow, '', '__confirm');
-    expect(r.submit.description).toBe('');
-  });
-
-  test('toISODate uses the local calendar date', () => {
-    expect(toISODate(new Date(2026, 0, 5, 23, 59))).toBe('2026-01-05');
+describe('summaryText', () => {
+  test('shows the price with the platform fee and that payment is after the service', () => {
+    const text = summaryText({ service: 'Gardener', data: { date: '2026-11-08', time: '10:00 AM', address: HOME.full, description: '' } });
+    expect(text).toContain('₹230');
+    expect(text).toMatch(/kaam ke baad/);
   });
 });

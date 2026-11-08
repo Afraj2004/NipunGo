@@ -185,6 +185,25 @@ function WorkerDashboard() {
     }
   };
 
+  // ── Cash collected after the job ──────────────────────
+  const handleCashReceived = async (bookingId) => {
+    if (!window.confirm('Customer se cash mil gaya? Ye record ho jayega.')) return;
+    setActionLoading(bookingId + '_cash');
+    try {
+      const res = await axios.put(`/booking/cash-received/${bookingId}`, {});
+      const paid = res.data.booking;
+      setMyBookings(prev =>
+        prev.map(b => b._id === bookingId
+          ? { ...b, paymentStatus: paid.paymentStatus, paidVia: paid.paidVia, paidAmount: paid.paidAmount, paidAt: paid.paidAt }
+          : b)
+      );
+    } catch (err) {
+      alert(err.response?.data?.message || 'Kuch galat hua!');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
   // ── On the way ────────────────────────────────────────
   const handleOnTheWay = async (bookingId) => {
     setActionLoading(bookingId + '_way');
@@ -743,10 +762,7 @@ function WorkerDashboard() {
                                 {request.customer?.name}
                               </p>
                               <p className="text-gray-500 text-sm">
-                                📱 {request.customer?.phone}
-                              </p>
-                              <p className="text-gray-500 text-sm">
-                                📧 {request.customer?.email}
+                                🔒 Contact details privacy ke liye hidden hain
                               </p>
                             </div>
                           </div>
@@ -913,13 +929,9 @@ function WorkerDashboard() {
                               <p className="font-bold text-gray-800">
                                 {booking.customer?.name}
                               </p>
-                              <a
-                                href={`tel:${booking.customer?.phone}`}
-                                className="text-primary text-sm font-medium py-2
-                                  flex items-center gap-1 hover:underline"
-                              >
-                                📱 {booking.customer?.phone}
-                              </a>
+                              <p className="text-gray-400 text-xs">
+                                🔒 Phone number privacy ke liye hidden hai
+                              </p>
                             </div>
                           </div>
 
@@ -997,11 +1009,33 @@ function WorkerDashboard() {
                                 ✅ Finish service
                               </button>
                             )}
-                            {booking.status === 'Completed' && (
-                              <div className="flex-1 bg-green-50 text-green-600
+                            {booking.status === 'Completed' && booking.paymentStatus !== 'paid' && (
+                              <div className="flex flex-1 flex-col gap-2">
+                                <div className="bg-green-50 text-green-600 border border-green-200
+                                  py-2 rounded-xl font-bold text-center text-sm">
+                                  ✅ Completed
+                                </div>
+                                <button
+                                  onClick={() => handleCashReceived(booking._id)}
+                                  disabled={actionLoading === booking._id + '_cash'}
+                                  className="bg-secondary text-white py-3 rounded-xl font-bold
+                                    hover:bg-secondary-700 transition disabled:opacity-60"
+                                >
+                                  {actionLoading === booking._id + '_cash'
+                                    ? '⏳ Saving...'
+                                    : `💵 ₹${booking.price} cash mil gaya`}
+                                </button>
+                                <p className="text-xs text-gray-400 text-center">
+                                  Customer online bhi pay kar sakta hai. Tab ye apne aap "Paid" ho jayega.
+                                </p>
+                              </div>
+                            )}
+                            {booking.status === 'Completed' && booking.paymentStatus === 'paid' && (
+                              <div className="flex-1 bg-green-50 text-green-700
                                 border border-green-200 py-3 rounded-xl
                                 font-bold text-center">
-                                ✅ Completed
+                                ✅ Completed · ₹{booking.paidAmount || booking.price} paid
+                                {booking.paidVia === 'cash' ? ' (cash)' : ' (online)'}
                               </div>
                             )}
                             {booking.status === 'Cancelled' && (

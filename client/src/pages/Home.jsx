@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ServiceIcon from '../components/ServiceIcon';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -210,9 +211,9 @@ function Home() {
               <button
                 key={index}
                 onClick={() => handleBookNow(service.name)}
-                className="bg-white bg-opacity-20 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-opacity-30 transition backdrop-blur-sm border border-white border-opacity-20"
+                className="inline-flex min-h-[44px] items-center gap-2 bg-white bg-opacity-20 text-white pl-2 pr-4 py-2 rounded-full text-sm font-medium hover:bg-opacity-30 transition backdrop-blur-sm border border-white border-opacity-20"
               >
-                {service.icon} {service.name}
+                <ServiceIcon service={service.name} size={24} className="!rounded-full" /> {service.name}
               </button>
             ))}
           </motion.div>
@@ -299,8 +300,8 @@ function Home() {
                 className="bg-white rounded-2xl p-6 text-center shadow-md cursor-pointer group"
                 onClick={() => handleBookNow(service.name)}
               >
-                <div className="text-5xl mb-4 group-hover:scale-110 transition-transform duration-300">
-                  {service.icon}
+                <div className="mb-4 flex justify-center transition-transform duration-300 group-hover:scale-110">
+                  <ServiceIcon service={service.name} size={72} />
                 </div>
                 <h3 className="font-bold text-gray-800 text-lg mb-1">
                   {service.name}
