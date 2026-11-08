@@ -71,7 +71,7 @@ function Options({ options, disabled, onPick }) {
 // the conversation stays alive while the user moves between pages.
 function ChatWidget() {
   const navigate = useNavigate();
-  useLocation(); // re-render on every navigation so we pick up login state
+  const { pathname } = useLocation(); // also re-renders on every navigation, so login state stays fresh
 
   // Re-render on login/logout even when the route doesn't change
   const [, setAuthTick] = useState(0);
@@ -367,6 +367,13 @@ function ChatWidget() {
   };
 
   const lastIndex = messages.length - 1;
+
+  // This is the customers' booking assistant. Workers and admins never see it, and neither
+  // does anyone on the worker login / sign-up / dashboard pages (the public worker profile
+  // at /worker/<id> is a customer page, so it keeps the chat).
+  const role = user?.role;
+  const onWorkerPortal = ['/worker/login', '/worker/register', '/worker/dashboard'].includes(pathname);
+  if (role === 'worker' || role === 'admin' || onWorkerPortal) return null;
 
   return (
     <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50">

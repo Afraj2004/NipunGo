@@ -5,11 +5,13 @@ import { CHAT_EXPIRY_MS, saveChat, GREETING } from '../utils/chatStorage';
 
 const mockNavigate = jest.fn();
 
+let mockPathname = '/';
+
 jest.mock(
   'react-router-dom',
   () => ({
     useNavigate: () => mockNavigate,
-    useLocation: () => ({ pathname: '/' }),
+    useLocation: () => ({ pathname: mockPathname }),
   }),
   { virtual: true }
 );
@@ -24,6 +26,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  mockPathname = '/';
   localStorage.clear();
   axios.get.mockResolvedValue({
     data: { addresses: [{ _id: 'a1', label: 'Home', full: '12 MG Road, Pune, India', isDefault: true }] },
@@ -149,15 +152,31 @@ test('guests can use tiles but are asked to log in to book', async () => {
   expect(axios.post).not.toHaveBeenCalled();
 });
 
-test('workers and admins cannot book through the chat', async () => {
+test('workers and admins get no booking chat at all', () => {
   loginAs('worker');
+  const { unmount } = render(<ChatWidget />);
+  expect(screen.queryByLabelText(/open nipun ai chat/i)).toBeNull();
+  unmount();
+
+  loginAs('admin');
   render(<ChatWidget />);
-  openChat();
+  expect(screen.queryByLabelText(/open nipun ai chat/i)).toBeNull();
+});
 
-  click('💧 Pipe / nal leak');
-  click(await screen.findByText(/Haan, Plumber book karo/));
+test.each(['/worker/login', '/worker/register', '/worker/dashboard'])(
+  'no chat on the worker page %s, even before logging in',
+  (path) => {
+    mockPathname = path;
+    render(<ChatWidget />);
+    expect(screen.queryByLabelText(/open nipun ai chat/i)).toBeNull();
+  }
+);
 
-  expect(await screen.findByText(/sirf customer account/i)).toBeInTheDocument();
+test('the public worker profile (a customer page) keeps the chat', () => {
+  mockPathname = '/worker/6aef73c28c6738fef1dfac8f';
+  loginAs('customer');
+  render(<ChatWidget />);
+  expect(screen.getByLabelText(/open nipun ai chat/i)).toBeInTheDocument();
 });
 
 test('a chat left idle past the expiry is cleared and the user starts again', async () => {
